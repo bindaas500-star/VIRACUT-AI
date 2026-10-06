@@ -262,3 +262,12 @@ audio{width:100%;margin-top:6px}
 .tx-like.on{opacity:1;background:rgba(244,63,94,.85);border-color:#f43f5e}
 .tx-like.inline{position:static;width:auto;height:auto;border-radius:20px;padding:2px 12px;font-size:14px;background:rgba(255,255,255,.08)}
 .tx-like.inline.on{background:rgba(244,63,94,.85)}
+
+/* ===== Settings ===== */
+.set-row{display:flex;align-items:center;gap:10px;width:100%;padding:14px;background:none;border:none;border-bottom:1px solid var(--line);color:var(--txt);font-family:inherit;font-size:14px;cursor:pointer;text-align:left}
+.set-row:last-child{border-bottom:none}
+button.set-row:active{background:rgba(255,255,255,.04)}
+.switch{position:relative;width:46px;height:27px;border-radius:20px;border:none;background:#3a3a4a;cursor:pointer;flex-shrink:0}
+.switch .knob{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:left .18s}
+.switch.on{background:#22d3ee}
+.switch.on .knob{left:22px}

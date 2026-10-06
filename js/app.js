@@ -461,6 +461,8 @@
     document.getElementById('btnSignOut').onclick = function () {
       Auth.signOut(); toast('Signed out.'); renderProfile(); renderHome();
     };
+    var bs = document.getElementById('btnSettings');
+    if (bs) bs.onclick = function () { SettingsScreen.render(); };
   }
 
   /* ================= EDITOR chrome ================= */
@@ -528,6 +530,7 @@
 
   /* ================= init ================= */
   function init() {
+    try { if (window.I18N) I18N.applyStatic(); } catch (e) {}
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.onclick = function () {
         var id = b.getAttribute('data-nav');
