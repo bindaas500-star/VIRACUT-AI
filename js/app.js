@@ -40,6 +40,27 @@
   }
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
+  /* Real OAuth sign-in with friendly error handling */
+  function oauthSignIn(provider) {
+    if (!Auth.configured(provider)) {
+      modal('<h3>🔑 Sign-in not connected yet</h3>' +
+        '<p style="font-size:13.5px">' + (provider === 'google' ? 'Google' : 'Facebook') + ' sign-in needs a Client/App ID from the app owner.</p>' +
+        '<p class="muted" style="margin-top:8px">Owner: add the ID in <b>js/auth-config.js</b> (steps in OAUTH-SETUP.md), then it goes live.</p>' +
+        '<div class="row" style="margin-top:12px"><button class="btn primary" id="soOk" style="flex:1">OK</button></div>',
+        function (root) { root.querySelector('#soOk').onclick = closeModal; });
+      return;
+    }
+    toast('Opening ' + (provider === 'google' ? 'Google' : 'Facebook') + '…');
+    var p = provider === 'google' ? Auth.signInWithGoogle() : Auth.signInWithFacebook();
+    p.then(function (u) {
+      toast('Welcome, ' + u.name.split(' ')[0] + '!');
+      renderProfile(); renderHome();
+    }).catch(function (e) {
+      if (e && e.cancelled) return; // user closed the popup — stay silent
+      toast('Sign-in failed — try again.');
+    });
+  }
+
   /* ================= router ================= */
   var NAV_IDS = ['screen-home', 'screen-create', 'screen-projects', 'screen-aitools', 'screen-profile'];
   var App = {
@@ -389,11 +410,23 @@
   function renderProfile() {
     var u = Auth.user();
     var pc = document.getElementById('profileCard');
-    pc.innerHTML = u
-      ? '<div class="kv"><span><b>' + esc(u.name) + '</b><br><span class="muted">' + esc(u.email) + '</span></span><span class="tag">demo</span></div>'
-      : '<p style="margin-bottom:10px">You are browsing as a guest.</p><button class="btn primary block" id="pfSign">👋 Sign in (Demo)</button>';
-    var q = pc.querySelector('#pfSign');
-    if (q) q.onclick = function () { Auth.promptSignIn().then(function () { renderProfile(); renderHome(); }); };
+    if (u) {
+      var pic = u.picture ? '<img src="' + esc(u.picture) + '" alt="" style="width:46px;height:46px;border-radius:50%;object-fit:cover">' : '<span style="font-size:34px">👤</span>';
+      var prov = u.provider === 'google' ? '<span class="tag">Google</span>' : u.provider === 'facebook' ? '<span class="tag">Facebook</span>' : '<span class="tag">demo</span>';
+      pc.innerHTML = '<div class="kv"><span style="display:flex;gap:12px;align-items:center">' + pic +
+        '<span><b>' + esc(u.name) + '</b><br><span class="muted">' + esc(u.email || '') + '</span></span></span>' + prov + '</div>';
+    } else {
+      pc.innerHTML =
+        '<p style="margin-bottom:12px">Sign in to sync your creator profile.</p>' +
+        '<div class="stack">' +
+        '<button class="btn block" id="pfGoogle" style="background:#fff;color:#1a1a1a;font-weight:700">🔵 Continue with Google</button>' +
+        '<button class="btn block" id="pfFb" style="background:#1877F2;color:#fff;font-weight:700">📘 Continue with Facebook</button>' +
+        '</div>';
+      var g = pc.querySelector('#pfGoogle');
+      var f = pc.querySelector('#pfFb');
+      if (g) g.onclick = function () { oauthSignIn('google'); };
+      if (f) f.onclick = function () { oauthSignIn('facebook'); };
+    }
     var pro = Plans.isPro();
     document.getElementById('planCard').innerHTML =
       '<div class="kv"><span><b>' + (pro ? '⭐ Pro' : 'Free plan') + '</b><br><span class="muted">' + esc(Plans.describe()) + '</span></span></div>' +
