@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ai.viracut.app",
+      "sha256_cert_fingerprints": [
+        "6F:8C:68:B8:A0:3A:63:24:1C:4A:53:25:58:EC:50:CC:17:CF:7F:63:DD:FA:E2:D5:D1:FA:ED:6E:BA:3D:73:7A"
+      ]
+    }
+  }
+]
