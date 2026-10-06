@@ -17,6 +17,7 @@
         '<button class="back-btn" id="txSlBack">‹ Back</button>' +
         '<h2 class="page-title">📷 ' + esc(tpl.title) + '</h2>' +
         '<p class="page-sub">' + t('slots.sub', { n: tpl.slots }) + '</p>' +
+        '<button class="btn ghost block" id="txMultiPick" style="margin-bottom:10px">' + t('slots.multi') + '</button>' +
         '<div id="txSlotGrid" class="tx-slot-grid"></div>' +
         '<div class="card"><h4>' + t('slots.music') + '</h4><div class="pills" id="txMusicPills"></div>' +
         '<div class="row" style="margin-top:10px"><button class="btn ghost sm" id="txMusicUp">' + t('slots.upload') + '</button></div></div>' +
@@ -27,6 +28,7 @@
       this.renderMusic(); this.renderQuality(); this.render();
       var self = this;
       scr.querySelector('#txGenerate').onclick = function () { self.generate(); };
+      scr.querySelector('#txMultiPick').onclick = function () { self.pickAll(); };
       App.show('screen-txslots');
     },
     render: function () {
@@ -60,6 +62,23 @@
         s.file = f; s.url = URL.createObjectURL(f);
         s.type = f.type.indexOf('video') === 0 ? 'video' : 'photo';
         TXSlots.render();
+      };
+      inp.click();
+    },
+    pickAll: function () {
+      var inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'video/*,image/*'; inp.multiple = true;
+      inp.onchange = function () {
+        var files = inp.files; if (!files || !files.length) return;
+        var n = Math.min(files.length, slSlots.length);
+        for (var i = 0; i < n; i++) {
+          var s = slSlots[i], f = files[i];
+          if (s.url) { try { URL.revokeObjectURL(s.url); } catch (e) {} }
+          s.file = f; s.url = URL.createObjectURL(f);
+          s.type = f.type.indexOf('video') === 0 ? 'video' : 'photo';
+        }
+        TXSlots.render();
+        toast(n + ' / ' + slSlots.length + ' slots filled ✓');
       };
       inp.click();
     },
