@@ -338,16 +338,16 @@
       TXThumb.clear();
       var scr = document.getElementById('screen-templates');
       scr.innerHTML =
-        '<h2 class="page-title">🎭 Templates</h2>' +
-        '<p class="page-sub">Pick a style → add your clips → video ready.</p>' +
-        '<div class="search-row"><input type="text" id="txSearch" placeholder="Search templates…"></div>' +
+        t('tpl.title') +
+        t('tpl.sub') +
+        '<div class="search-row"><input type="text" id="txSearch" placeholder="' + t('tpl.search') + '"></div>' +
         '<div class="pills" id="txSortPills" style="margin-bottom:6px"></div>' +
         '<div class="pills" id="txCatPills" style="margin-bottom:6px"></div>' +
         '<div id="txSections"></div>' +
-        '<div class="card" style="margin-top:14px"><div class="kv"><span>🛠️ <b>Template Creator</b><br><span class="muted">Design your own reusable template</span></span>' +
-        '<button class="btn primary sm" id="txGoCreate">Open</button></div></div>' +
-        '<p class="fineprint">Original ViraCut designs — timed scenes, smart FX, text & music. Your media stays on your device.</p>';
-      var sorts = [['trending', '🔥 Trending'], ['new', '🆕 New'], ['popular', '❤️ Popular']];
+        '<div class="card" style="margin-top:14px"><div class="kv"><span>' + t('creator.title') + '<br><span class="muted">' + t('creator.sub') + '</span></span>' +
+        '<button class="btn primary sm" id="txGoCreate">' + t('creator.open') + '</button></div></div>' +
+        '<p class="fineprint">' + t('tpl.fine') + '</p>';
+      var sorts = [['trending', t('sort.trending')], ['new', t('sort.new')], ['popular', t('sort.popular')]];
       var sp = document.getElementById('txSortPills');
       sorts.forEach(function (s) {
         var b = document.createElement('button');
@@ -391,11 +391,11 @@
       if (txCat !== 'all' || txQuery) {
         var list = TX.sorted(txSort).filter(match);
         var sec = document.createElement('div');
-        sec.innerHTML = '<h3 class="sec-title">' + list.length + ' templates</h3>';
+        sec.innerHTML = '<h3 class="sec-title">' + t('sec.count', { n: list.length }) + '</h3>';
         var row = document.createElement('div'); row.className = 'tx-grid';
         list.forEach(function (t) { row.appendChild(cardEl(t)); });
         sec.appendChild(row); host.appendChild(sec);
-        if (!list.length) host.innerHTML = '<div class="empty">No templates found.</div>';
+        if (!list.length) host.innerHTML = '<div class="empty">' + t('sec.empty') + '</div>';
         return;
       }
       var self = this;
@@ -404,14 +404,14 @@
         var feat = TX.featured();
         if (feat.length) {
           var fsec = document.createElement('div');
-          fsec.innerHTML = '<h3 class="sec-title">⭐ Featured</h3>';
+          fsec.innerHTML = t('sec.featured');
           var car = document.createElement('div'); car.className = 'tx-featured';
           feat.forEach(function (t) { car.appendChild(featEl(t)); });
           fsec.appendChild(car); host.appendChild(fsec);
         }
       } catch (e) {}
       /* sorted discovery list */
-      var sortTitles = { trending: '🔥 Trending this week', new: '🆕 Newest', popular: '❤️ Most loved' };
+      var sortTitles = { trending: t('sec.trending_week'), new: t('sec.newest'), popular: t('sec.loved') };
       var sorted = TX.sorted(txSort).slice(0, 12);
       var ssec = document.createElement('div');
       ssec.innerHTML = '<h3 class="sec-title" style="margin:14px 0 8px">' + sortTitles[txSort] + '</h3>';
@@ -421,7 +421,7 @@
       var fresh = TX.remote();
       if (fresh.length && txSort === 'new') {
         var nsec = document.createElement('div');
-        nsec.innerHTML = '<h3 class="sec-title" style="margin:14px 0 8px">📥 New Arrivals</h3>';
+        nsec.innerHTML = t('sec.arrivals');
         var nrow = document.createElement('div'); nrow.className = 'tx-row';
         fresh.forEach(function (t) { nrow.appendChild(cardEl(t)); });
         nsec.appendChild(nrow); host.appendChild(nsec);
@@ -434,7 +434,7 @@
       var mine = TX.custom();
       if (mine.length) {
         var sec2 = document.createElement('div');
-        sec2.innerHTML = '<h3 class="sec-title">🛠️ My Templates</h3>';
+        sec2.innerHTML = '<h3 class="sec-title">' + t('sec.my') + '</h3>';
         var row2 = document.createElement('div'); row2.className = 'tx-row';
         mine.forEach(function (t) { row2.appendChild(cardEl(t)); });
         sec2.appendChild(row2); host.appendChild(sec2);
@@ -465,24 +465,24 @@
       var liked = window.TXStats && TXStats.liked(tpl.id);
       var uses = window.TXStats ? fmtNum(TXStats.displayUses(tpl.id)) : '';
       scr.innerHTML =
-        '<button class="back-btn" id="txDtBack">‹ Templates</button>' +
+        '<button class="back-btn" id="txDtBack">' + t('btn.back') + '</button>' +
         '<h2 class="page-title">' + tpl.icon + ' ' + esc(tpl.title) + '</h2>' +
-        '<p class="page-sub">by ' + esc(TX.creator(tpl)) + (uses ? ' · ▶ ' + uses + ' uses' : '') +
+        '<p class="page-sub">' + t('det.by') + ' ' + esc(TX.creator(tpl)) + (uses ? ' · ▶ ' + uses + ' ' + t('det.uses') : '') +
         ' <button class="tx-like inline' + (liked ? ' on' : '') + '" id="txDtLike">❤</button></p>' +
         '<div class="tx-detail-wrap"><canvas id="txDtPreview" width="216" height="384"></canvas>' +
         '<div class="tx-meta">' +
-        '<div class="meta-row"><small>⏱️ Duration</small><b>' + tpl.duration.toFixed(1) + 's</b></div>' +
-        '<div class="meta-row"><small>📷 Media slots</small><b>' + tpl.slots + ' clips</b></div>' +
-        '<div class="meta-row"><small>🎵 Music</small><b>' + esc(tpl.music.name) + '</b></div>' +
-        '<div class="meta-row"><small>📐 Format</small><b>' + tpl.aspect + '</b></div>' +
-        '<div class="meta-row"><small>🗂️ Category</small><b>' + (cat ? cat.name : tpl.category) + '</b></div>' +
+        '<div class="meta-row"><small>' + t('det.duration') + '</small><b>' + tpl.duration.toFixed(1) + 's</b></div>' +
+        '<div class="meta-row"><small>' + t('det.slots') + '</small><b>' + tpl.slots + ' clips</b></div>' +
+        '<div class="meta-row"><small>' + t('det.music') + '</small><b>' + esc(tpl.music.name) + '</b></div>' +
+        '<div class="meta-row"><small>' + t('det.format') + '</small><b>' + tpl.aspect + '</b></div>' +
+        '<div class="meta-row"><small>' + t('det.category') + '</small><b>' + (cat ? cat.name : tpl.category) + '</b></div>' +
         '</div></div>' +
-        '<div class="card"><h4>📷 Required media</h4><div class="slot-chips" id="txDtSlots"></div></div>' +
-        '<button class="btn primary block big" id="txDtUse">Use Template</button>';
+        '<div class="card"><h4>' + t('det.required') + '</h4><div class="slot-chips" id="txDtSlots"></div></div>' +
+        '<button class="btn primary block big" id="txDtUse">' + t('btn.use') + '</button>';
       var chips = scr.querySelector('#txDtSlots');
       for (var i = 1; i <= tpl.slots; i++) {
         var s = document.createElement('span');
-        s.className = 'slot-chip'; s.textContent = '📷 Slot ' + i;
+        s.className = 'slot-chip'; s.textContent = t('slot.chip', { n: i });
         chips.appendChild(s);
       }
       scr.querySelector('#txDtBack').onclick = function () { App.show('screen-templates'); TXBrowse.render(); };

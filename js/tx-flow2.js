@@ -16,11 +16,11 @@
       scr.innerHTML =
         '<button class="back-btn" id="txSlBack">‹ Back</button>' +
         '<h2 class="page-title">📷 ' + esc(tpl.title) + '</h2>' +
-        '<p class="page-sub">Add ' + tpl.slots + ' photos/videos — tap a slot to pick, tap again to replace.</p>' +
+        '<p class="page-sub">' + t('slots.sub', { n: tpl.slots }) + '</p>' +
         '<div id="txSlotGrid" class="tx-slot-grid"></div>' +
-        '<div class="card"><h4>🎵 Music</h4><div class="pills" id="txMusicPills"></div>' +
-        '<div class="row" style="margin-top:10px"><button class="btn ghost sm" id="txMusicUp">＋ Upload my music</button></div></div>' +
-        '<div class="card"><h4>⚙️ Quality</h4><div class="pills" id="txQuality">' +
+        '<div class="card"><h4>' + t('slots.music') + '</h4><div class="pills" id="txMusicPills"></div>' +
+        '<div class="row" style="margin-top:10px"><button class="btn ghost sm" id="txMusicUp">' + t('slots.upload') + '</button></div></div>' +
+        '<div class="card"><h4>' + t('slots.quality') + '</h4><div class="pills" id="txQuality">' +
         '<button class="pill on" data-q="720">720p</button><button class="pill" data-q="1080">1080p</button></div></div>' +
         '<button class="btn primary block big" id="txGenerate">▶ Generate Video</button>';
       scr.querySelector('#txSlBack').onclick = function () { TXDetail.open(tpl.id); };
@@ -49,7 +49,7 @@
       });
       var done = slSlots.filter(function (s) { return s.url; }).length;
       var btn = document.getElementById('txGenerate');
-      if (btn) btn.textContent = done >= slTpl.slots ? '▶ Generate Video' : '▶ Generate (' + done + '/' + slTpl.slots + ')';
+      if (btn) btn.textContent = done >= slTpl.slots ? t('slots.generate') : t('slots.generate_n', { d: done, n: slTpl.slots });
     },
     pick: function (s) {
       var inp = document.createElement('input');
@@ -125,14 +125,18 @@
       var _s = state.quality === 1080 ? 1080 : 720;
       var _d = tpl.aspect === '1:1' ? [_s, _s] : tpl.aspect === '16:9' ? [_s, Math.round(_s * 9 / 16)] : [_s, Math.round(_s * 16 / 9)];
       var W = _d[0], H = _d[1], total = tpl.duration;
+      var endCard = false;
+      try { endCard = window.Settings && Settings.get('defaultEnding', false); } catch (e) {}
+      var END_DUR = 1.6;
+      if (endCard) total += END_DUR;
       var starts = C.startsFor(tpl);
 
       var scr = document.getElementById('screen-txgen');
       scr.innerHTML =
-        '<h2 class="page-title">✨ Creating your video</h2>' +
+        t('gen.title') +
         '<div class="tx-gen-wrap"><canvas id="txGenCanvas" width="216" height="384"></canvas>' +
         '<div class="prog"><div class="prog-fill" id="txGenFill"></div></div>' +
-        '<p class="muted" id="txGenLabel">Rendering scenes…</p></div>';
+        '<p class="muted" id="txGenLabel">' + t('gen.rendering') + '</p></div>';
       App.show('screen-txgen');
 
       function mkC() { var c = document.createElement('canvas'); c.width = W; c.height = H; return c; }
@@ -181,14 +185,32 @@
       var fill = document.getElementById('txGenFill'), label = document.getElementById('txGenLabel');
       var t0 = performance.now(), curScene = -1, finished = false;
 
+      function drawEndCard(lt) {
+        var k = Math.min(1, lt / 0.5);
+        var gr = g.createLinearGradient(0, 0, 0, H);
+        gr.addColorStop(0, '#1e1b4b'); gr.addColorStop(1, '#0f0d24');
+        g.fillStyle = gr; g.fillRect(0, 0, W, H);
+        g.save(); g.globalAlpha = k;
+        g.fillStyle = '#fff'; g.textAlign = 'center';
+        g.font = '800 ' + Math.round(W * 0.07) + 'px sans-serif';
+        g.fillText('Made with', W / 2, H * 0.46);
+        var gr2 = g.createLinearGradient(W * 0.2, 0, W * 0.8, 0);
+        gr2.addColorStop(0, '#a78bfa'); gr2.addColorStop(1, '#f472b6');
+        g.fillStyle = gr2;
+        g.font = '800 ' + Math.round(W * 0.11) + 'px sans-serif';
+        g.fillText('ViraCut AI ✦', W / 2, H * 0.56);
+        g.restore();
+      }
       function draw(t) {
-        var idx = C.sceneAt(tpl, starts, Math.min(t, total - 0.001));
+        if (endCard && t >= tpl.duration) { drawEndCard(t - tpl.duration); }
+        else {
+        var idx = C.sceneAt(tpl, starts, Math.min(t, tpl.duration - 0.001));
         var local = t - starts[idx], sc = tpl.scenes[idx];
         if (idx !== curScene) {
           curScene = idx;
           var m = mediaBySlot[sc.slot];
           if (m && m.video) { try { m.el.currentTime = 0; m.el.play(); } catch (e) {} }
-          label.textContent = 'Scene ' + (idx + 1) + ' / ' + tpl.scenes.length + '…';
+          label.textContent = t('gen.scene', { i: idx + 1, n: tpl.scenes.length });
         }
         var tr = sc.trans || 'cut';
         if (idx > 0 && tr !== 'cut' && local < TRANS_DUR) {
@@ -211,6 +233,7 @@
           C.composeScene(fg, flatX, flatC, tpl, ovlParts, mediaBySlot, idx, local, t, W, H);
           g.drawImage(frame, 0, 0);
         }
+        } // endCard else
         pg.drawImage(cv, 0, 0, pv.width, pv.height);
         fill.style.width = Math.min(100, (t / total) * 100).toFixed(1) + '%';
       }
@@ -252,15 +275,15 @@
       var scr = document.getElementById('screen-txresult');
       scr.innerHTML =
         '<button class="back-btn" id="txRsBack">‹ Templates</button>' +
-        '<h2 class="page-title">🎉 Your video is ready</h2>' +
+        t('res.title') +
         '<video id="txRsVideo" src="' + genUrl + '" controls playsinline></video>' +
-        '<div class="row"><button class="btn primary" id="txRsSave" style="flex:1">⬇ Save</button>' +
-        '<button class="btn ghost" id="txRsShare" style="flex:1">📤 Share</button></div>' +
+        '<div class="row"><button class="btn primary" id="txRsSave" style="flex:1">' + t('res.save') + '</button>' +
+        '<button class="btn ghost" id="txRsShare" style="flex:1">' + t('res.share') + '</button></div>' +
         '<div class="row" style="margin-top:8px">' +
-        '<button class="btn ghost sm" id="txRsRestart" style="flex:1">↺ Restart template</button>' +
-        '<button class="btn ghost sm" id="txRsEdit" style="flex:1">✏️ Edit media</button></div>' +
+        '<button class="btn ghost sm" id="txRsRestart" style="flex:1">' + t('res.restart') + '</button>' +
+        '<button class="btn ghost sm" id="txRsEdit" style="flex:1">' + t('res.editmedia') + '</button></div>' +
         '<div class="row" style="margin-top:8px">' +
-        '<button class="btn ghost sm" id="txRsTplEdit" style="flex:1">🎬 Edit template</button></div>' +
+        '<button class="btn ghost sm" id="txRsTplEdit" style="flex:1">' + t('res.edittpl') + '</button></div>' +
         '<p class="fineprint">WebM format — MP4 comes with the native build.</p>';
       scr.querySelector('#txRsBack').onclick = function () { App.show('screen-templates'); TXBrowse.render(); };
       scr.querySelector('#txRsSave').onclick = function () {
