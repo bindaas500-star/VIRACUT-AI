@@ -166,7 +166,16 @@
       if (i >= 0) all[i] = t; else all.unshift(t);
       try { localStorage.setItem('viracut_tx_custom', JSON.stringify(all)); } catch (e) {}
     },
-    all: function () { return TXDATA.concat(TX.custom()); },
+    remote: function () { return (window.TXRemote && TXRemote.cached()) || []; },
+    all: function () {
+      // remote overrides builtin/custom by id
+      var seen = {}, out = [];
+      TXDATA.concat(TX.custom()).concat(TX.remote()).forEach(function (t) {
+        if (seen[t.id]) { for (var i = 0; i < out.length; i++) if (out[i].id === t.id) out[i] = t; }
+        else { seen[t.id] = 1; out.push(t); }
+      });
+      return out;
+    },
     get: function (id) {
       var all = TX.all();
       for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];

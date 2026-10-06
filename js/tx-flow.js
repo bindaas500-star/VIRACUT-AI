@@ -269,7 +269,7 @@
     cv.className = 'tx-thumb'; cv.width = 180; cv.height = 240;
     var info = document.createElement('div');
     info.className = 'tx-info';
-    info.innerHTML = '<b>' + esc(tpl.title) + '</b><small>' + tpl.slots + ' clips · ' + tpl.duration.toFixed(0) + 's</small>';
+    info.innerHTML = '<b>' + (tpl.remote ? '🆕 ' : '') + esc(tpl.title) + '</b><small>' + tpl.slots + ' clips · ' + tpl.duration.toFixed(0) + 's</small>';
     b.appendChild(cv); b.appendChild(info);
     b.onclick = function () { TXDetail.open(tpl.id); };
     TXThumb.register(cv, tpl);
@@ -303,6 +303,15 @@
       si.oninput = function () { txQuery = si.value.trim().toLowerCase(); TXBrowse.sections(); };
       document.getElementById('txGoCreate').onclick = function () { App.show('screen-txcreate'); TXCreate.render(); };
       this.sections();
+      // silent check for new templates (free, via GitHub)
+      try {
+        TXRemote.check(function (err, res) {
+          if (!err && res && res.changed) {
+            var el = document.getElementById('screen-templates');
+            if (el && el.classList.contains('active')) { TXBrowse.sections(); toast('🆕 New templates arrived!'); }
+          }
+        });
+      } catch (e) {}
     },
     sections: function () {
       TXThumb.clear();
@@ -324,6 +333,14 @@
         return;
       }
       var self = this;
+      var fresh = TX.remote();
+      if (fresh.length) {
+        var nsec = document.createElement('div');
+        nsec.innerHTML = '<h3 class="sec-title" style="margin:14px 0 8px">🆕 New Arrivals</h3>';
+        var nrow = document.createElement('div'); nrow.className = 'tx-row';
+        fresh.forEach(function (t) { nrow.appendChild(cardEl(t)); });
+        nsec.appendChild(nrow); host.appendChild(nsec);
+      }
       this.section(host, 'trending', '🔥 Trending Now');
       TX.categories().forEach(function (c) {
         if (c.id === 'trending' || c.id === 'my') return;
