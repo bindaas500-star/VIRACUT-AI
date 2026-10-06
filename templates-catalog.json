@@ -654,8 +654,233 @@
     "particles",
     "streak"
    ]
+  },
+  {
+   "id": "remote_healing_vibe",
+   "title": "Healing Vibe",
+   "icon": "🌊",
+   "category": "sad",
+   "slots": 5,
+   "duration": 16,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Sukoon Edits",
+   "music": {
+    "name": "Ocean Calm (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 3.0,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "vignette",
+     "filter": "cool",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.0,
+     "slot": 2,
+     "anim": "kenburns-in",
+     "fx": "none",
+     "filter": "cool",
+     "trans": "fade",
+     "text": {
+      "content": "سانس لو",
+      "urdu": true,
+      "size": 11,
+      "pos": "mid",
+      "color": "#e0f2fe",
+      "glow": "#38bdf8",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3.5,
+     "slot": 3,
+     "anim": "pan-right",
+     "fx": "none",
+     "filter": "none",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.0,
+     "slot": 4,
+     "anim": "kenburns-out",
+     "fx": "vignette",
+     "filter": "cool",
+     "trans": "fade",
+     "text": {
+      "content": "وقت سب ٹھیک کر دیتا ہے",
+      "urdu": true,
+      "size": 8,
+      "pos": "mid",
+      "color": "#e0f2fe",
+      "glow": "#38bdf8",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3.5,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "gloworbs",
+     "filter": "cool",
+     "trans": "fade"
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_night_walk",
+   "title": "Night Walk",
+   "icon": "🌃",
+   "category": "cinematic",
+   "slots": 4,
+   "duration": 12,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Cine Lab",
+   "music": {
+    "name": "Midnight Drive (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 3.0,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "vignette",
+     "filter": "mono",
+     "trans": "fade",
+     "text": {
+      "content": "رات کے مسافر",
+      "urdu": true,
+      "size": 10,
+      "pos": "mid",
+      "color": "#e2e8f0",
+      "glow": "#64748b",
+      "anim": "fadeup"
+     }
+    },
+    {
+     "dur": 3.0,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "grain",
+     "filter": "mono",
+     "trans": "cut"
+    },
+    {
+     "dur": 3.0,
+     "slot": 3,
+     "anim": "kenburns-in",
+     "fx": "vignette",
+     "filter": "cool",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.0,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "focus",
+     "filter": "mono",
+     "trans": "fade"
+    }
+   ],
+   "overlays": [
+    "grain",
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_attitude_drop",
+   "title": "Attitude Drop",
+   "icon": "😎",
+   "category": "attitude",
+   "slots": 5,
+   "duration": 9,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Sigma Edits",
+   "music": {
+    "name": "Bass Drop (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 1.2,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "ATTITUDE",
+      "size": 11,
+      "pos": "mid",
+      "color": "#ffffff",
+      "glow": "#f43f5e",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 1.5,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "shake",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 1.8,
+     "slot": 3,
+     "anim": "kenburns-out",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "👑",
+      "size": 12,
+      "pos": "mid",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.0,
+     "slot": 4,
+     "anim": "pan-right",
+     "fx": "punch",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.5,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "neon",
+     "filter": "vivid",
+     "trans": "zoom",
+     "text": {
+      "content": "NOOR? NO — LEGEND",
+      "size": 6,
+      "pos": "bottom",
+      "color": "#fde047",
+      "glow": "#f59e0b",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
   }
  ],
  "updated": "2026-10-07",
- "version": 3
+ "version": 4
 }
