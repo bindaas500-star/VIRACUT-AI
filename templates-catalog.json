@@ -1,1 +1,353 @@
-{"note":"Remote template catalog for ViraCut AI. Add a template object here and it appears in the app's Templates tab (New Arrivals) after the app fetches this file. Same schema as js/tx-data.js.","templates":[{"art":"mosque","aspect":"9:16","category":"islamic","duration":15,"icon":"🕌","id":"remote_eid","music":{"mood":"soft","name":"Chaand Raat (AI loop)"},"overlays":["particles","confetti"],"remote":true,"scenes":[{"anim":"slow-zoom","dur":3.0,"filter":"warm","fx":"reveal","slot":1,"text":{"anim":"fadeup","color":"#fde68a","content":"عید مبارک","glow":"#fde68a","pos":"mid","size":12,"urdu":true},"trans":"cut"},{"anim":"kenburns-in","dur":3.0,"filter":"warm","fx":"vignette","slot":2,"text":{"anim":"fadeup","color":"#a7f3d0","content":"خوشیاں بانٹیں","glow":"#a7f3d0","pos":"mid","size":10,"urdu":true},"trans":"fade"},{"anim":"pan-left","dur":3.0,"filter":"warm","fx":"punch","slot":3,"text":{"anim":"words","color":"#fde68a","content":"دعاؤں میں یاد رکھیں","glow":"#fde68a","pos":"mid","size":9,"urdu":true},"trans":"cut"},{"anim":"kenburns-out","dur":3.0,"filter":"warm","fx":"none","slot":4,"trans":"fade"},{"anim":"static","dur":3.0,"filter":"warm","fx":"focus","slot":5,"text":{"anim":"pop","color":"#ffffff","content":"🌙✨","pos":"mid","size":12},"trans":"fade"}],"slots":5,"title":"Eid Mubarak"},{"aspect":"9:16","category":"sad","duration":12,"icon":"🥀","id":"remote_tanhai","music":{"mood":"emotional","name":"Empty Room (AI loop)"},"overlays":["rain","grain"],"remote":true,"scenes":[{"anim":"slow-zoom","dur":3.0,"filter":"mono","fx":"vignette","slot":1,"text":{"anim":"words","color":"#e2e8f0","content":"تنہائی","glow":"#94a3b8","pos":"mid","size":12,"urdu":true},"trans":"cut"},{"anim":"pan-right","dur":3.0,"filter":"cool","fx":"grain","slot":2,"text":{"anim":"words","color":"#e2e8f0","content":"بھیڑ میں بھی اکیلا","glow":"#94a3b8","pos":"mid","size":9,"urdu":true},"trans":"cut"},{"anim":"kenburns-out","dur":3.0,"filter":"mono","fx":"vignette","slot":3,"trans":"fade"},{"anim":"static","dur":3.0,"filter":"mono","fx":"focus","slot":4,"text":{"anim":"fadeup","color":"#ffffff","content":"🥀","pos":"mid","size":11},"trans":"fade"}],"slots":4,"title":"Tanhai"},{"aspect":"9:16","category":"trending","duration":9,"icon":"💥","id":"remote_flashbeat","music":{"mood":"upbeat","name":"Flash Beat (AI loop)"},"overlays":["particles"],"remote":true,"scenes":[{"anim":"kenburns-in","dur":1.2,"filter":"vivid","fx":"flash","slot":1,"text":{"anim":"pop","color":"#ffffff","content":"DROP THE BEAT","pos":"mid","size":9},"trans":"cut"},{"anim":"pan-left","dur":1.2,"filter":"vivid","fx":"punch","slot":2,"trans":"cut"},{"anim":"kenburns-out","dur":1.2,"filter":"cool","fx":"shake","slot":3,"trans":"cut"},{"anim":"pan-right","dur":1.2,"filter":"vivid","fx":"flash","slot":4,"trans":"cut"},{"anim":"kenburns-in","dur":1.2,"filter":"vivid","fx":"punch","slot":5,"trans":"cut"},{"anim":"slow-zoom","dur":3.0,"filter":"vivid","fx":"neon","slot":6,"text":{"anim":"fadeup","color":"#67e8f9","content":"LIKE & FOLLOW ✦","pos":"bottom","size":7},"trans":"zoom"}],"slots":6,"title":"Flash Beat"}],"updated":"2026-10-06","version":1}
+{
+ "note": "Remote template catalog for ViraCut AI. Add a template object here and it appears in the app's Templates tab (New Arrivals) after the app fetches this file. Same schema as js/tx-data.js.",
+ "templates": [
+  {
+   "art": "mosque",
+   "aspect": "9:16",
+   "category": "islamic",
+   "duration": 15,
+   "icon": "🕌",
+   "id": "remote_eid",
+   "music": {
+    "mood": "soft",
+    "name": "Chaand Raat (AI loop)"
+   },
+   "overlays": [
+    "particles",
+    "confetti"
+   ],
+   "remote": true,
+   "scenes": [
+    {
+     "anim": "slow-zoom",
+     "dur": 3.0,
+     "filter": "warm",
+     "fx": "reveal",
+     "slot": 1,
+     "text": {
+      "anim": "fadeup",
+      "color": "#fde68a",
+      "content": "عید مبارک",
+      "glow": "#fde68a",
+      "pos": "mid",
+      "size": 12,
+      "urdu": true
+     },
+     "trans": "cut"
+    },
+    {
+     "anim": "kenburns-in",
+     "dur": 3.0,
+     "filter": "warm",
+     "fx": "vignette",
+     "slot": 2,
+     "text": {
+      "anim": "fadeup",
+      "color": "#a7f3d0",
+      "content": "خوشیاں بانٹیں",
+      "glow": "#a7f3d0",
+      "pos": "mid",
+      "size": 10,
+      "urdu": true
+     },
+     "trans": "fade"
+    },
+    {
+     "anim": "pan-left",
+     "dur": 3.0,
+     "filter": "warm",
+     "fx": "punch",
+     "slot": 3,
+     "text": {
+      "anim": "words",
+      "color": "#fde68a",
+      "content": "دعاؤں میں یاد رکھیں",
+      "glow": "#fde68a",
+      "pos": "mid",
+      "size": 9,
+      "urdu": true
+     },
+     "trans": "cut"
+    },
+    {
+     "anim": "kenburns-out",
+     "dur": 3.0,
+     "filter": "warm",
+     "fx": "none",
+     "slot": 4,
+     "trans": "fade"
+    },
+    {
+     "anim": "static",
+     "dur": 3.0,
+     "filter": "warm",
+     "fx": "focus",
+     "slot": 5,
+     "text": {
+      "anim": "pop",
+      "color": "#ffffff",
+      "content": "🌙✨",
+      "pos": "mid",
+      "size": 12
+     },
+     "trans": "fade"
+    }
+   ],
+   "slots": 5,
+   "title": "Eid Mubarak"
+  },
+  {
+   "aspect": "9:16",
+   "category": "sad",
+   "duration": 12,
+   "icon": "🥀",
+   "id": "remote_tanhai",
+   "music": {
+    "mood": "emotional",
+    "name": "Empty Room (AI loop)"
+   },
+   "overlays": [
+    "rain",
+    "grain"
+   ],
+   "remote": true,
+   "scenes": [
+    {
+     "anim": "slow-zoom",
+     "dur": 3.0,
+     "filter": "mono",
+     "fx": "vignette",
+     "slot": 1,
+     "text": {
+      "anim": "words",
+      "color": "#e2e8f0",
+      "content": "تنہائی",
+      "glow": "#94a3b8",
+      "pos": "mid",
+      "size": 12,
+      "urdu": true
+     },
+     "trans": "cut"
+    },
+    {
+     "anim": "pan-right",
+     "dur": 3.0,
+     "filter": "cool",
+     "fx": "grain",
+     "slot": 2,
+     "text": {
+      "anim": "words",
+      "color": "#e2e8f0",
+      "content": "بھیڑ میں بھی اکیلا",
+      "glow": "#94a3b8",
+      "pos": "mid",
+      "size": 9,
+      "urdu": true
+     },
+     "trans": "cut"
+    },
+    {
+     "anim": "kenburns-out",
+     "dur": 3.0,
+     "filter": "mono",
+     "fx": "vignette",
+     "slot": 3,
+     "trans": "fade"
+    },
+    {
+     "anim": "static",
+     "dur": 3.0,
+     "filter": "mono",
+     "fx": "focus",
+     "slot": 4,
+     "text": {
+      "anim": "fadeup",
+      "color": "#ffffff",
+      "content": "🥀",
+      "pos": "mid",
+      "size": 11
+     },
+     "trans": "fade"
+    }
+   ],
+   "slots": 4,
+   "title": "Tanhai"
+  },
+  {
+   "aspect": "9:16",
+   "category": "trending",
+   "duration": 9,
+   "icon": "💥",
+   "id": "remote_flashbeat",
+   "music": {
+    "mood": "upbeat",
+    "name": "Flash Beat (AI loop)"
+   },
+   "overlays": [
+    "particles"
+   ],
+   "remote": true,
+   "scenes": [
+    {
+     "anim": "kenburns-in",
+     "dur": 1.2,
+     "filter": "vivid",
+     "fx": "flash",
+     "slot": 1,
+     "text": {
+      "anim": "pop",
+      "color": "#ffffff",
+      "content": "DROP THE BEAT",
+      "pos": "mid",
+      "size": 9
+     },
+     "trans": "cut"
+    },
+    {
+     "anim": "pan-left",
+     "dur": 1.2,
+     "filter": "vivid",
+     "fx": "punch",
+     "slot": 2,
+     "trans": "cut"
+    },
+    {
+     "anim": "kenburns-out",
+     "dur": 1.2,
+     "filter": "cool",
+     "fx": "shake",
+     "slot": 3,
+     "trans": "cut"
+    },
+    {
+     "anim": "pan-right",
+     "dur": 1.2,
+     "filter": "vivid",
+     "fx": "flash",
+     "slot": 4,
+     "trans": "cut"
+    },
+    {
+     "anim": "kenburns-in",
+     "dur": 1.2,
+     "filter": "vivid",
+     "fx": "punch",
+     "slot": 5,
+     "trans": "cut"
+    },
+    {
+     "anim": "slow-zoom",
+     "dur": 3.0,
+     "filter": "vivid",
+     "fx": "neon",
+     "slot": 6,
+     "text": {
+      "anim": "fadeup",
+      "color": "#67e8f9",
+      "content": "LIKE & FOLLOW ✦",
+      "pos": "bottom",
+      "size": 7
+     },
+     "trans": "zoom"
+    }
+   ],
+   "slots": 6,
+   "title": "Flash Beat"
+  },
+  {
+   "id": "remote_frame_vines",
+   "title": "Green Vines",
+   "icon": "🌿",
+   "category": "trending",
+   "slots": 1,
+   "duration": 17,
+   "aspect": "9:16",
+   "frame": "vines",
+   "remote": true,
+   "music": {
+    "name": "Jungle Calm (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 17,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "none",
+     "filter": "vivid",
+     "trans": "cut"
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_frame_arch",
+   "title": "Golden Arch",
+   "icon": "🕌",
+   "category": "islamic",
+   "slots": 1,
+   "duration": 15,
+   "aspect": "9:16",
+   "frame": "arch",
+   "remote": true,
+   "music": {
+    "name": "Chaand Raat (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 15,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "none",
+     "filter": "warm",
+     "trans": "cut",
+     "text": {
+      "content": "ماشاءاللہ",
+      "urdu": true,
+      "size": 10,
+      "pos": "bottom",
+      "color": "#fde68a",
+      "glow": "#fde68a",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_frame_rose",
+   "title": "Rose Frame",
+   "icon": "🌸",
+   "category": "love",
+   "slots": 1,
+   "duration": 12,
+   "aspect": "9:16",
+   "frame": "floral",
+   "remote": true,
+   "music": {
+    "name": "Tere Naam (AI loop)",
+    "mood": "romantic"
+   },
+   "scenes": [
+    {
+     "dur": 12,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "none",
+     "filter": "warm",
+     "trans": "cut"
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
+  }
+ ],
+ "updated": "2026-10-06",
+ "version": 2
+}

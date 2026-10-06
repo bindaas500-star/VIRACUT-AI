@@ -174,6 +174,15 @@
   /* full scene into tg (frame coords). flatC/flatX = scratch. */
   function composeScene(tg, flatX, flatC, tpl, ovlParts, mediaBySlot, idx, local, t, W, H) {
     var sc = tpl.scenes[idx], fx = FX.get(sc.fx);
+    /* framed-photo templates: photo inside a decorative frame (frame static, photo slow-zooms) */
+    if (tpl.frame && window.TXFrame) {
+      var m0 = mediaBySlot[sc.slot];
+      tg.save(); tg.fillStyle = '#000'; tg.fillRect(0, 0, W, H); tg.restore();
+      TXFrame.render(tg, W, H, tpl, (m0 && m0.ok) ? m0.el : null, t, local, sc.dur);
+      if (sc.text) drawText(tg, sc.text, W, H, local);
+      (tpl.overlays || []).forEach(function (o) { if (OVL[o]) OVL[o](tg, W, H, t, ovlParts[o]); });
+      return;
+    }
     var artFn = tpl.art && TXArt[tpl.art];
     tg.save();
     tg.fillStyle = '#000'; tg.fillRect(0, 0, W, H);
