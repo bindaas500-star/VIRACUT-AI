@@ -69,6 +69,8 @@
       // stop per-screen loops
       if (id !== 'screen-photovideo' && window.PV && PV.stopPreview) PV.stopPreview();
       if (id !== 'screen-editor' && window.Editor && Editor.playing) Editor.pause();
+      if (id !== 'screen-txdetail' && window.TXDetail) TXDetail.stop();
+      if (id !== 'screen-txgen' && window.TXGen) TXGen.cancel();
       document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
       var el = document.getElementById(id);
       if (el) el.classList.add('active');
@@ -149,37 +151,9 @@
     });
   }
 
-  /* ================= TEMPLATES ================= */
+  /* ================= TEMPLATES (TemplateX engine) ================= */
   function renderTemplates() {
-    var grid = document.getElementById('tplGrid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    Templates.list().forEach(function (t) {
-      var total = t.scenes.reduce(function (a, s) { return a + s.d; }, 0);
-      var card = document.createElement('button');
-      card.className = 'tpl-card';
-      card.innerHTML =
-        '<span class="tpl-ic">' + t.icon + '</span>' +
-        '<span class="tpl-name">' + t.name + '</span>' +
-        '<small class="muted">' + t.desc + '</small>' +
-        '<small class="muted">' + t.aspect + ' · ' + t.scenes.length + ' scenes · ' + total.toFixed(1) + 's</small>' +
-        '<span class="btn primary sm" style="margin-top:8px">Use template</span>';
-      card.onclick = function () {
-        App.modal(
-          '<h3>' + t.icon + ' ' + t.name + '</h3>' +
-          '<p class="muted" style="margin-bottom:6px">' + t.desc + '</p>' +
-          '<p style="font-size:13.5px">Creates a project with ' + t.scenes.length + ' timed scenes (' + total.toFixed(1) + 's, ' + t.aspect + '). ' +
-          'Tap each scene in the timeline to add your own clips.</p>' +
-          '<div class="row" style="margin-top:12px"><button class="btn primary" id="tuGo" style="flex:1">Use template</button>' +
-          '<button class="btn ghost" id="tuNo">Cancel</button></div>',
-          function (root) {
-            root.querySelector('#tuNo').onclick = App.closeModal;
-            root.querySelector('#tuGo').onclick = function () { App.closeModal(); Templates.apply(t.id); };
-          }
-        );
-      };
-      grid.appendChild(card);
-    });
+    try { TXBrowse.render(); } catch (e) { toast('Templates failed: ' + e.message, true); }
   }
 
   /* ================= AI TOOLS HUB ================= */
@@ -555,7 +529,11 @@
   /* ================= init ================= */
   function init() {
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
-      b.onclick = function () { App.show(b.getAttribute('data-nav')); };
+      b.onclick = function () {
+        var id = b.getAttribute('data-nav');
+        App.show(id);
+        if (id === 'screen-templates') renderTemplates();
+      };
     });
     document.getElementById('btnNewProject2').onclick = function () { Projects.newProjectDialog(); };
     document.getElementById('socialBack').onclick = function () {

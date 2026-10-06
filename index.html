@@ -138,13 +138,13 @@
     </section>
 
     <!-- ============ AI STORY ============ -->
-    <!-- TEMPLATES -->
-    <section class="screen" id="screen-templates">
-      <h2 class="page-title">🎭 Templates</h2>
-      <p class="page-sub">Original ViraCut styles — one tap, then add your clips.</p>
-      <div id="tplGrid" class="tpl-grid"></div>
-      <p class="fineprint">Templates are original designs with timed scenes, smart FX and text. Your media stays on your device.</p>
-    </section>
+    <!-- TEMPLATES (TemplateX engine — filled by TXBrowse) -->
+    <section class="screen" id="screen-templates"></section>
+    <section class="screen" id="screen-txdetail"></section>
+    <section class="screen" id="screen-txslots"></section>
+    <section class="screen" id="screen-txgen"></section>
+    <section class="screen" id="screen-txresult"></section>
+    <section class="screen" id="screen-txcreate"></section>
 
     <section class="screen" id="screen-aistory">
       <h2 class="page-title">✍️ AI Story</h2>
@@ -218,6 +218,7 @@
   <nav id="bottomnav">
     <button data-nav="screen-home" class="active"><span class="ni">⌂</span><span>Home</span></button>
     <button data-nav="screen-create"><span class="ni">＋</span><span>Create</span></button>
+    <button data-nav="screen-templates"><span class="ni">🎭</span><span>Templates</span></button>
     <button data-nav="screen-projects"><span class="ni">▦</span><span>Projects</span></button>
     <button data-nav="screen-aitools"><span class="ni">✦</span><span>AI Tools</span></button>
     <button data-nav="screen-profile"><span class="ni">◉</span><span>Profile</span></button>
@@ -245,6 +246,10 @@
 <script src="js/ai-video.js"></script>
 <script src="js/projects.js"></script>
 <script src="js/templates.js"></script>
+<script src="js/tx-data.js"></script>
+<script src="js/tx-music.js"></script>
+<script src="js/tx-flow.js"></script>
+<script src="js/tx-flow2.js"></script>
 <script src="js/app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {

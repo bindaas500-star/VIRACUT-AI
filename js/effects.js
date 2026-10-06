@@ -123,10 +123,67 @@
         g.drawImage(off, 0, 0);
         g.restore();
       }
+    },
+
+    reveal: {
+      name: 'Dark Reveal', icon: '🌘',
+      over: function (g, c, item, W, H, t) {
+        var k = Math.max(0, Math.min(1, t / 1.4));
+        if (k < 1) { g.fillStyle = 'rgba(0,0,0,' + ((1 - k) * 0.94).toFixed(3) + ')'; g.fillRect(0, 0, W, H); }
+      }
+    },
+
+    gloworbs: {
+      name: 'Glow Orbs', icon: '🔆',
+      over: function (g, c, item, W, H, t) {
+        var orbs = [[0.20, 0.34, 0.10, '255,150,40'], [0.80, 0.30, 0.13, '255,170,60'], [0.52, 0.66, 0.08, '255,200,120'], [0.35, 0.55, 0.06, '255,120,60']];
+        g.save(); g.globalCompositeOperation = 'screen';
+        orbs.forEach(function (o, i) {
+          var fl = 0.55 + 0.45 * Math.sin(t * 2.4 + i * 2.1);
+          var r = o[2] * Math.min(W, H) * (0.9 + 0.25 * fl);
+          var gr = g.createRadialGradient(o[0] * W, o[1] * H, 0, o[0] * W, o[1] * H, r);
+          gr.addColorStop(0, 'rgba(' + o[3] + ',' + (0.55 * fl).toFixed(3) + ')');
+          gr.addColorStop(1, 'rgba(' + o[3] + ',0)');
+          g.fillStyle = gr; g.beginPath(); g.arc(o[0] * W, o[1] * H, r, 0, 7); g.fill();
+        });
+        g.restore();
+      }
+    },
+
+    streak: {
+      name: 'Light Streak', icon: '🌠',
+      over: function (g, c, item, W, H, t) {
+        var p = prog(item, t);
+        var y = H * (0.22 + 0.56 * p);
+        g.save(); g.globalCompositeOperation = 'screen';
+        var gr = g.createLinearGradient(0, y - 34, 0, y + 34);
+        gr.addColorStop(0, 'rgba(140,200,255,0)');
+        gr.addColorStop(0.5, 'rgba(180,220,255,' + (0.34 * Math.sin(p * Math.PI)).toFixed(3) + ')');
+        gr.addColorStop(1, 'rgba(140,200,255,0)');
+        g.fillStyle = gr; g.fillRect(0, y - 34, W, 68);
+        g.restore();
+      }
+    },
+
+    smoke: {
+      name: 'Smoke', icon: '🌫️',
+      over: function (g, c, item, W, H, t) {
+        g.save();
+        for (var i = 0; i < 5; i++) {
+          var x = (((i * 0.23 + t * 0.018 * (1 + i * 0.25)) % 1.3) - 0.15) * W;
+          var y = H * (0.74 + 0.05 * Math.sin(t * 0.7 + i * 1.3));
+          var r = W * (0.30 + 0.07 * Math.sin(i * 3 + t * 0.5));
+          var gr = g.createRadialGradient(x, y, 0, x, y, r);
+          gr.addColorStop(0, 'rgba(205,205,215,0.13)');
+          gr.addColorStop(1, 'rgba(205,205,215,0)');
+          g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+        }
+        g.restore();
+      }
     }
   };
 
-  var ORDER = ['none', 'punch', 'shake', 'mirror', 'flash', 'glitch', 'focus', 'neon', 'vignette', 'grain', 'vintage'];
+  var ORDER = ['none', 'punch', 'shake', 'mirror', 'flash', 'glitch', 'focus', 'neon', 'vignette', 'grain', 'vintage', 'reveal', 'gloworbs', 'streak', 'smoke'];
 
   window.FX = {
     list: function () {
