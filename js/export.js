@@ -1,0 +1,140 @@
+/* ViraCut AI — export.js
+   Real export: replays the project in real time onto an offscreen canvas
+   (720p free / 1080p pro), captures canvas + mixed audio via MediaRecorder,
+   produces a downloadable .webm. Free plan gets a "ViraCut AI" watermark. */
+(function () {
+  'use strict';
+
+  function pickMime() {
+    var cands = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', ''];
+    for (var i = 0; i < cands.length; i++) {
+      try { if (!cands[i] || MediaRecorder.isTypeSupported(cands[i])) return cands[i]; } catch (e) {}
+    }
+    return '';
+  }
+
+  var Exporter = {
+    exporting: false,
+
+    export: function (onProgress) {
+      var self = this;
+      return new Promise(function (resolve, reject) {
+        if (self.exporting) return reject(new Error('Export already running.'));
+        var p = Editor.project;
+        if (!p) return reject(new Error('No project open.'));
+        var tm = Store.timing();
+        if (!tm.items.length || tm.total < 0.3) return reject(new Error('Add clips first — nothing to export.'));
+        if (typeof MediaRecorder === 'undefined') return reject(new Error('MediaRecorder not supported on this device.'));
+
+        self.exporting = true;
+        Editor.pause();
+
+        var size = Plans.exportSize(p.aspect);
+        var cv = document.createElement('canvas');
+        cv.width = size.w; cv.height = size.h;
+        var g = cv.getContext('2d');
+
+        var eng = AudioLab.Engine;
+        var dest = eng.exportDest();
+        eng.setMonitorLevel(0); // silent while rendering
+        Editor.vidEls.forEach(function (el) { eng.routeVideo(el, true); });
+
+        // voices → export stream
+        var voices = [];
+        if (p.music && p.music.buffer) voices.push({ buffer: p.music.buffer, volume: p.music.volume, loop: true, offset: 0 });
+        p.voiceovers.forEach(function (v) { if (v.buffer) voices.push({ buffer: v.buffer, volume: v.volume, loop: false, offset: 0 }); });
+        if (voices.length) eng.start(voices, true);
+
+        var stream = cv.captureStream(30);
+        dest.stream.getAudioTracks().forEach(function (tr) { stream.addTrack(tr); });
+        var mime = pickMime();
+        var rec;
+        try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6000000 } : undefined); }
+        catch (e) { cleanup(); return reject(new Error('Could not start recorder: ' + e.message)); }
+
+        var chunks = [];
+        rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+        var stopped = new Promise(function (res) { rec.onstop = res; });
+        rec.start(250);
+
+        var t = 0, total = tm.total, last = performance.now(), finished = false;
+
+        function driveVideos() {
+          var found = Store.clipAt(t);
+          Editor.vidEls.forEach(function (el, id) {
+            try {
+              var isCur = found && found.item.clip.id === id;
+              if (isCur) {
+                var c = found.item.clip;
+                el.playbackRate = c.speed || 1;
+                if (el.paused) { var pr = el.play(); if (pr && pr.catch) pr.catch(function () {}); }
+                var exp = c.in + (t - found.item.start) * (c.speed || 1);
+                if (el.readyState >= 1 && Math.abs(el.currentTime - exp) > 0.4) el.currentTime = Math.min(exp, c.out - 0.05);
+              } else if (!el.paused) el.pause();
+            } catch (e) {}
+          });
+        }
+        function watermark() {
+          if (!Plans.watermark()) return;
+          g.save();
+          g.font = '700 ' + Math.round(size.w * 0.035) + 'px sans-serif';
+          g.textAlign = 'right';
+          g.fillStyle = 'rgba(255,255,255,.55)';
+          g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = 6;
+          g.fillText('ViraCut AI', size.w - 18, size.h - 20);
+          g.restore();
+        }
+        function frame(now) {
+          if (finished) return;
+          var dt = (now - last) / 1000; last = now;
+          t += dt;
+          if (t >= total) { t = total; finish(); return; }
+          driveVideos();
+          Editor.composite(g, size.w, size.h, t, true);
+          watermark();
+          if (onProgress) { try { onProgress(t / total); } catch (e) {} }
+          requestAnimationFrame(frame);
+        }
+        function finish() {
+          finished = true;
+          driveVideos();
+          Editor.composite(g, size.w, size.h, total - 0.03, true);
+          watermark();
+          if (onProgress) { try { onProgress(1); } catch (e) {} }
+          setTimeout(function () {
+            try { rec.stop(); } catch (e) {}
+            stopped.then(function () {
+              var blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' });
+              var url = URL.createObjectURL(blob);
+              cleanup();
+              resolve({ url: url, blob: blob, size: size });
+            });
+          }, 400);
+        }
+        function cleanup() {
+          self.exporting = false;
+          eng.stop();
+          eng.setMonitorLevel(1);
+          Editor.vidEls.forEach(function (el) { eng.routeVideo(el, false); try { el.pause(); } catch (e) {} });
+          stream.getTracks().forEach(function (tr) { try { tr.stop(); } catch (e) {} });
+        }
+
+        // draw first frame immediately so the video isn't black at start
+        driveVideos();
+        Editor.composite(g, size.w, size.h, 0, true);
+        watermark();
+        requestAnimationFrame(function (now) { last = now; requestAnimationFrame(frame); });
+      });
+    },
+
+    download: function (url, name) {
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = (name || 'viracut').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') + '.webm';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { a.remove(); }, 500);
+    }
+  };
+
+  window.Exporter = Exporter;
+})();
