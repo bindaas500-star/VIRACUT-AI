@@ -103,6 +103,7 @@
     { ic: '🎙️', t: 'AI Voiceover', s: 'text → voice', go: function () { App.show('screen-aivoice'); } },
     { ic: '📝', t: 'Auto Captions', s: 'in editor', go: autoCaptionsGo },
     { ic: '✂️', t: 'Video Editor', s: 'timeline', go: openEditorGo },
+    { ic: '🎭', t: 'Templates', s: 'one-tap styles', go: function () { App.show('screen-templates'); renderTemplates(); } },
     { ic: '🔥', t: 'Trending Ideas', s: 'fresh daily', go: function () { App.show('screen-trending'); } },
     { ic: '📁', t: 'My Projects', s: 'on device', go: function () { App.show('screen-projects'); } }
   ];
@@ -135,6 +136,7 @@
       { ic: '🎬', t: 'New video project', s: 'Import clips & edit on the timeline', go: function () { Projects.newProjectDialog(); } },
       { ic: '🖼️', t: 'Photo to video', s: 'Slideshow with Ken Burns motion', go: function () { App.show('screen-photovideo'); } },
       { ic: '✨', t: 'AI video generator', s: 'Describe it — AI renders it (needs API)', go: function () { App.show('screen-aivideo'); } },
+      { ic: '🎭', t: 'Templates', s: 'One-tap original styles — add your clips', go: function () { App.show('screen-templates'); renderTemplates(); } },
       { ic: '✍️', t: 'AI story', s: 'Idea → full story pack (offline)', go: function () { App.show('screen-aistory'); } }
     ];
     box.innerHTML = '';
@@ -144,6 +146,39 @@
       b.innerHTML = '<span class="so-ic">' + o.ic + '</span><span>' + o.t + '<br><small class="muted">' + o.s + '</small></span>';
       b.onclick = o.go;
       box.appendChild(b);
+    });
+  }
+
+  /* ================= TEMPLATES ================= */
+  function renderTemplates() {
+    var grid = document.getElementById('tplGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    Templates.list().forEach(function (t) {
+      var total = t.scenes.reduce(function (a, s) { return a + s.d; }, 0);
+      var card = document.createElement('button');
+      card.className = 'tpl-card';
+      card.innerHTML =
+        '<span class="tpl-ic">' + t.icon + '</span>' +
+        '<span class="tpl-name">' + t.name + '</span>' +
+        '<small class="muted">' + t.desc + '</small>' +
+        '<small class="muted">' + t.aspect + ' · ' + t.scenes.length + ' scenes · ' + total.toFixed(1) + 's</small>' +
+        '<span class="btn primary sm" style="margin-top:8px">Use template</span>';
+      card.onclick = function () {
+        App.modal(
+          '<h3>' + t.icon + ' ' + t.name + '</h3>' +
+          '<p class="muted" style="margin-bottom:6px">' + t.desc + '</p>' +
+          '<p style="font-size:13.5px">Creates a project with ' + t.scenes.length + ' timed scenes (' + total.toFixed(1) + 's, ' + t.aspect + '). ' +
+          'Tap each scene in the timeline to add your own clips.</p>' +
+          '<div class="row" style="margin-top:12px"><button class="btn primary" id="tuGo" style="flex:1">Use template</button>' +
+          '<button class="btn ghost" id="tuNo">Cancel</button></div>',
+          function (root) {
+            root.querySelector('#tuNo').onclick = App.closeModal;
+            root.querySelector('#tuGo').onclick = function () { App.closeModal(); Templates.apply(t.id); };
+          }
+        );
+      };
+      grid.appendChild(card);
     });
   }
 

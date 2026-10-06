@@ -220,7 +220,7 @@
       var item = found.item, idx = found.index;
       // crossfade: previous clip end-still dissolving
       var xf = item.clip.transitionIn === 'crossfade' && idx > 0 && (t - item.start) < XF;
-      this.drawClipMedia(g, item.clip, item, W, H, t, 1);
+      this.drawClipFX(g, item, W, H, t);
       if (xf) {
         var prev = Store.timing().items[idx - 1];
         var still = this.stills.get(prev.clip.id);
@@ -270,6 +270,30 @@
       }
       g.restore();
     },
+    drawClipFX: function (g, item, W, H, t) {
+      // Smart FX wrapper: pre-transforms, pixel post-processing, overlays.
+      // Shared by preview and export, so effects are baked into the video.
+      var fx = (window.FX ? FX.get(item.clip.fx) : null) || {};
+      if (fx.post) {
+        var off = this._fxOff || (this._fxOff = document.createElement('canvas'));
+        if (off.width !== W || off.height !== H) { off.width = W; off.height = H; }
+        var og = off.getContext('2d');
+        og.fillStyle = '#000'; og.fillRect(0, 0, W, H);
+        this.drawClipMedia(og, item.clip, item, W, H, t, 1);
+        fx.post(g, off, item.clip, item, W, H, t);
+        if (fx.over) { g.save(); fx.over(g, item.clip, item, W, H, t); g.restore(); }
+      } else {
+        if (fx.pre) {
+          g.save();
+          fx.pre(g, item.clip, item, W, H, t);
+          this.drawClipMedia(g, item.clip, item, W, H, t, 1);
+          g.restore();
+        } else {
+          this.drawClipMedia(g, item.clip, item, W, H, t, 1);
+        }
+        if (fx.over) { g.save(); fx.over(g, item.clip, item, W, H, t); g.restore(); }
+      }
+    },
     drawClipMedia: function (g, clip, item, W, H, t, alpha) {
       g.save();
       g.globalAlpha = alpha == null ? 1 : alpha;
@@ -279,6 +303,22 @@
       if (rot) g.rotate(rot * Math.PI / 180);
       var swap = rot === 90 || rot === 270;
       var dw = swap ? H : W, dh = swap ? W : H;
+      if (clip.type === 'placeholder' || !clip.url) {
+        // template placeholder card
+        g.fillStyle = '#17142b'; g.fillRect(-dw / 2, -dh / 2, dw, dh);
+        g.strokeStyle = 'rgba(168,85,247,.75)'; g.lineWidth = Math.max(2, dw * 0.006);
+        g.setLineDash([14, 10]);
+        var pw = dw * 0.86, ph = dh * 0.62;
+        g.beginPath();
+        if (g.roundRect) g.roundRect(-pw / 2, -ph / 2, pw, ph, 18); else g.rect(-pw / 2, -ph / 2, pw, ph);
+        g.stroke(); g.setLineDash([]);
+        g.fillStyle = '#a855f7'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.font = '700 ' + Math.round(dw * 0.11) + 'px sans-serif';
+        g.fillText('＋', 0, -dh * 0.06);
+        g.fillStyle = '#e6e1f7'; g.font = '600 ' + Math.round(dw * 0.04) + 'px sans-serif';
+        g.fillText(clip.hint || 'Tap the clip below to add your media', 0, dh * 0.1, dw * 0.78);
+        g.restore(); return;
+      }
       if (clip.type === 'video') {
         var el = this.vidEls.get(clip.id);
         if (el && el.readyState >= 2 && el.videoWidth) {
@@ -395,9 +435,24 @@
       var f = inp.files[0]; if (!f) return;
       var url = URL.createObjectURL(f);
       var c = self.findClip(clipId);
-      if (c) { c.url = url; Store.mediaCache.set(clipId, url); }
-      self.snapshot(); Store.persist(); self.syncMedia(); self.renderTimeline(); self.drawOnce();
-      toast('Media re-linked.');
+      if (!c) return;
+      var isVid = f.type.indexOf('video') === 0;
+      var apply = function (dur) {
+        c.url = url; c.type = isVid ? 'video' : 'photo'; c.name = f.name;
+        c.duration = dur;
+        if (isVid) { c.out = Math.min(c.out || dur, dur); if (!(c.in >= 0)) c.in = 0; }
+        else { c.kb = true; }
+        Store.mediaCache.set(clipId, url);
+        self.snapshot(); Store.persist(); self.syncMedia(); self.renderTimeline(); self.drawOnce();
+        toast('Clip added.');
+      };
+      if (isVid) {
+        var v = document.createElement('video');
+        v.preload = 'metadata'; v.muted = true;
+        v.onloadedmetadata = function () { apply(v.duration || c.duration || 5); };
+        v.onerror = function () { apply(c.duration || 5); };
+        v.src = url;
+      } else apply(c.duration || 3);
     };
     inp.click();
   };
@@ -429,14 +484,14 @@
         thumb = st ? '<div class="thumb"><img src="' + st + '"></div>'
           : '<div class="thumb"><video src="' + c.url + '" muted preload="metadata" playsinline></video></div>';
       } else thumb = '<div class="thumb"><img src="' + c.url + '"></div>';
-      card.innerHTML = '<span class="badge">' + (c.type === 'video' ? '🎞' : '🖼') + ' ' + (i + 1) + '</span>' + thumb +
-        '<div class="meta">' + esc(c.name) + ' · ' + dur + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.transitionIn === 'crossfade' ? ' · ⋈' : '') + '</div>' +
-        (!c.url ? '<div class="relink">Media missing<br>(tap to re-link)</div>' : '');
+      card.innerHTML = '<span class="badge">' + (c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '🎞' : '🖼') + ' ' + (i + 1) + '</span>' + thumb +
+        '<div class="meta">' + esc(c.name) + ' · ' + dur + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.transitionIn === 'crossfade' ? ' · ⋈' : '') + (c.fx ? ' · ✨' : '') + '</div>' +
+        (!c.url ? '<div class="relink">' + (c.type === 'placeholder' ? '🎭 Tap to add your clip' : 'Media missing<br>(tap to re-link)') + '</div>' : '');
       card.onclick = function () {
         if (!c.url) { self.relinkClip(c.id); return; }
         self.selClipId = c.id;
         self.renderTimeline();
-        if (self.tool === 'trim' || self.tool === 'speed' || self.tool === 'rotate' || self.tool === 'transition') self.renderPanel();
+        if (self.tool === 'trim' || self.tool === 'speed' || self.tool === 'rotate' || self.tool === 'transition' || self.tool === 'fx') self.renderPanel();
       };
       el.appendChild(card);
     });
@@ -537,7 +592,7 @@
     { id: 'media', label: '📥 Media' }, { id: 'trim', label: '✂️ Trim' },
     { id: 'split', label: '🔪 Split' }, { id: 'speed', label: '⏩ Speed' },
     { id: 'rotate', label: '🔄 Rotate' }, { id: 'filter', label: '🎨 Filter' },
-    { id: 'transition', label: '⋈ Trans.' }, { id: 'text', label: '🔤 Text' },
+    { id: 'transition', label: '⋈ Trans.' }, { id: 'fx', label: '✨ FX' }, { id: 'text', label: '🔤 Text' },
     { id: 'sticker', label: '😀 Sticker' }, { id: 'captions', label: '💬 Captions' },
     { id: 'audio', label: '🎵 Audio' }
   ];
@@ -679,6 +734,27 @@
     function set(v) { c.transitionIn = v; self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); self.renderPanel(); }
     el.querySelector('#trNone').onclick = function () { set('none'); };
     el.querySelector('#trX').onclick = function () { set('crossfade'); };
+  };
+
+  /* ---------- FX (Smart Effects) ---------- */
+  Editor.panel_fx = function (el) {
+    var self = this, c = this.selClip();
+    if (!c) { el.innerHTML = '<p class="hint">Select a clip in the timeline first.</p>'; return; }
+    el.appendChild(h('<h4>✨ Smart FX — ' + esc(c.name) + '</h4>'));
+    var grid = document.createElement('div');
+    grid.className = 'fx-grid';
+    FX.list().forEach(function (f) {
+      var b = document.createElement('button');
+      b.className = 'fx-btn' + ((c.fx || 'none') === f.id ? ' on' : '');
+      b.innerHTML = '<span class="fx-ic">' + f.icon + '</span><span>' + f.name + '</span>';
+      b.onclick = function () {
+        c.fx = f.id === 'none' ? undefined : f.id;
+        self.snapshot(); Store.persist(); self.drawOnce(); self.renderTimeline(); self.renderPanel();
+      };
+      grid.appendChild(b);
+    });
+    el.appendChild(grid);
+    el.insertAdjacentHTML('beforeend', '<p class="muted" style="margin-top:8px">Original ViraCut effects — baked into export.</p>');
   };
 
   /* ---------- TEXT ---------- */
