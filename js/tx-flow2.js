@@ -120,6 +120,8 @@
       if (genRunning) return;
       genRunning = true;
       var tpl = state.tpl, C = TXCore;
+      TXGen._lastState = state;
+      try { if (window.TXStats) TXStats.use(tpl.id); } catch (e) {}
       var _s = state.quality === 1080 ? 1080 : 720;
       var _d = tpl.aspect === '1:1' ? [_s, _s] : tpl.aspect === '16:9' ? [_s, Math.round(_s * 9 / 16)] : [_s, Math.round(_s * 16 / 9)];
       var W = _d[0], H = _d[1], total = tpl.duration;
@@ -222,7 +224,7 @@
           genBlob = new Blob(chunks, { type: 'video/webm' });
           if (genUrl) { try { URL.revokeObjectURL(genUrl); } catch (e) {} }
           genUrl = URL.createObjectURL(genBlob);
-          TXGen.showResult(tpl, total);
+          TXGen.showResult(tpl, total, state);
         }, 400);
       }
 
@@ -246,7 +248,7 @@
 
       TXGen._cancel = function () { genRunning = false; try { rec.stop(); } catch (e) {} try { actx.close(); } catch (e) {} };
     },
-    showResult: function (tpl, total) {
+    showResult: function (tpl, total, state) {
       var scr = document.getElementById('screen-txresult');
       scr.innerHTML =
         '<button class="back-btn" id="txRsBack">‹ Templates</button>' +
@@ -257,6 +259,8 @@
         '<div class="row" style="margin-top:8px">' +
         '<button class="btn ghost sm" id="txRsRestart" style="flex:1">↺ Restart template</button>' +
         '<button class="btn ghost sm" id="txRsEdit" style="flex:1">✏️ Edit media</button></div>' +
+        '<div class="row" style="margin-top:8px">' +
+        '<button class="btn ghost sm" id="txRsTplEdit" style="flex:1">🎬 Edit template</button></div>' +
         '<p class="fineprint">WebM format — MP4 comes with the native build.</p>';
       scr.querySelector('#txRsBack').onclick = function () { App.show('screen-templates'); TXBrowse.render(); };
       scr.querySelector('#txRsSave').onclick = function () {
@@ -277,6 +281,8 @@
       };
       scr.querySelector('#txRsRestart').onclick = function () { TXSlots.open(tpl.id); };
       scr.querySelector('#txRsEdit').onclick = function () { TXSlots.open(tpl.id); };
+      var te = scr.querySelector('#txRsTplEdit');
+      if (te) te.onclick = function () { TXEdit.open(); };
       App.show('screen-txresult');
     },
     cancel: function () { if (TXGen._cancel) TXGen._cancel(); }
@@ -381,6 +387,137 @@
       toast('Template saved! 🎉');
       App.show('screen-templates');
       TXBrowse.setCat('my'); TXBrowse.render();
+    }
+  };
+})();
+
+/* ================= TEMPLATE EDITOR =================
+ * Post-generate editing: reorder scenes, timing, transition, filter,
+ * effect, text, add/remove scenes, change music. Regenerates video. */
+(function () {
+  'use strict';
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+  var draft = null, baseState = null;
+
+  function selOpts(list, cur, label) {
+    return list.map(function (o) {
+      var id = o.id || o, name = o.name || o;
+      return '<option value="' + esc(id) + '"' + (id === cur ? ' selected' : '') + '>' + esc(label ? label(o) : name) + '</option>';
+    }).join('');
+  }
+
+  function renderList() {
+    var box = document.getElementById('txEdScenes');
+    if (!box || !draft) return;
+    box.innerHTML = '';
+    draft.scenes.forEach(function (sc, i) {
+      var d = document.createElement('div');
+      d.className = 'scene-box';
+      d.innerHTML =
+        '<div class="row" style="align-items:center"><h5 style="flex:1;margin:0">Scene ' + (i + 1) + '</h5>' +
+        '<button class="btn ghost sm" data-mv="-1">▲</button>' +
+        '<button class="btn ghost sm" data-mv="1">▼</button>' +
+        '<button class="btn danger sm" data-del>✕</button></div>' +
+        '<div class="scene-grid" style="margin-top:8px">' +
+        '<div><label class="lbl">Clip slot #</label><input type="number" data-f="slot" min="1" max="20" value="' + sc.slot + '"></div>' +
+        '<div><label class="lbl">Duration (s)</label><div class="row"><button class="btn ghost sm" data-dur="-0.5">−</button>' +
+        '<b style="flex:1;text-align:center" data-durv>' + sc.dur.toFixed(1) + '</b>' +
+        '<button class="btn ghost sm" data-dur="0.5">＋</button></div></div>' +
+        '<div><label class="lbl">Animation</label><select data-f="anim">' + selOpts(TXANIMS, sc.anim) + '</select></div>' +
+        '<div><label class="lbl">Effect</label><select data-f="fx">' +
+        FX.list().map(function (f) { return '<option value="' + f.id + '"' + (f.id === sc.fx ? ' selected' : '') + '>' + f.icon + ' ' + esc(f.name) + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="lbl">Filter</label><select data-f="filter">' +
+        Object.keys(TXFILTERS).map(function (k) { return '<option value="' + k + '"' + (k === sc.filter ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>' +
+        '<div><label class="lbl">Transition in</label><select data-f="trans">' + selOpts(TXTRANS, sc.trans || 'cut') + '</select></div>' +
+        '<div class="full"><label class="lbl">Text</label><input type="text" data-f="text" value="' + esc((sc.text && sc.text.content) || '') + '" placeholder="Caption…"></div>' +
+        '</div>';
+      d.querySelector('[data-del]').onclick = function () {
+        if (draft.scenes.length <= 1) { toast('A template needs at least 1 scene.', true); return; }
+        draft.scenes.splice(i, 1); renderList();
+      };
+      d.querySelectorAll('[data-mv]').forEach(function (b) {
+        b.onclick = function () {
+          var j = i + (+b.getAttribute('data-mv'));
+          if (j < 0 || j >= draft.scenes.length) return;
+          var tmp = draft.scenes[i]; draft.scenes[i] = draft.scenes[j]; draft.scenes[j] = tmp;
+          renderList();
+        };
+      });
+      d.querySelectorAll('[data-f]').forEach(function (el) {
+        el.onchange = function () {
+          var f = el.getAttribute('data-f');
+          if (f === 'slot') sc.slot = Math.max(1, parseInt(el.value, 10) || 1);
+          else if (f === 'text') {
+            var v = el.value.trim();
+            if (v) sc.text = Object.assign({ pos: 'mid', color: '#ffffff', size: 8, anim: 'pop' }, sc.text, { content: v });
+            else delete sc.text;
+          } else sc[f] = el.value;
+        };
+      });
+      d.querySelectorAll('[data-dur]').forEach(function (b) {
+        b.onclick = function () {
+          sc.dur = Math.min(10, Math.max(0.5, Math.round((sc.dur + parseFloat(b.getAttribute('data-dur'))) * 10) / 10));
+          d.querySelector('[data-durv]').textContent = sc.dur.toFixed(1);
+        };
+      });
+      box.appendChild(d);
+    });
+  }
+
+  function recompute() {
+    draft.duration = draft.scenes.reduce(function (a, s) { return a + s.dur; }, 0);
+    draft.slots = draft.scenes.reduce(function (a, s) { return Math.max(a, s.slot); }, 0);
+  }
+
+  window.TXEdit = {
+    open: function () {
+      var st = TXGen._lastState;
+      if (!st || !st.tpl) { toast('Generate a video first.', true); return; }
+      baseState = st;
+      draft = JSON.parse(JSON.stringify(st.tpl));
+      var scr = document.getElementById('screen-txedit');
+      scr.innerHTML =
+        '<button class="back-btn" id="txEdBack">‹ Result</button>' +
+        '<h2 class="page-title">🎬 Edit Template</h2>' +
+        '<p class="page-sub">' + esc(draft.title) + ' — tweak scenes, then regenerate.</p>' +
+        '<div class="card"><label class="lbl">Music mood</label><div class="pills" id="txEdMoods"></div></div>' +
+        '<div class="card"><div class="row" style="align-items:center"><h4 style="flex:1;margin:0">🎞️ Scenes</h4>' +
+        '<button class="btn primary sm" id="txEdAdd">＋ Add scene</button></div><div id="txEdScenes"></div></div>' +
+        '<button class="btn primary block big" id="txEdRegen">▶ Regenerate Video</button>' +
+        '<button class="btn ghost block" id="txEdSaveAs" style="margin-top:8px">💾 Save as my template</button>';
+      var moods = scr.querySelector('#txEdMoods');
+      var curMood = st.musicMood || (draft.music && draft.music.mood) || 'soft';
+      TXMusic.moods().forEach(function (m) {
+        var b = document.createElement('button');
+        b.className = 'pill' + (m === curMood ? ' on' : '');
+        b.textContent = '🎵 ' + TXMusic.moodName(m);
+        b.onclick = function () {
+          baseState.musicMood = m; baseState.musicFile = null;
+          moods.querySelectorAll('.pill').forEach(function (x) { x.classList.remove('on'); });
+          b.classList.add('on');
+        };
+        moods.appendChild(b);
+      });
+      scr.querySelector('#txEdBack').onclick = function () { App.show('screen-txresult'); };
+      scr.querySelector('#txEdAdd').onclick = function () {
+        var maxSlot = draft.scenes.reduce(function (a, s) { return Math.max(a, s.slot); }, 0);
+        draft.scenes.push({ slot: maxSlot + 1, dur: 1.5, anim: 'kenburns-in', fx: 'punch', filter: 'none', trans: 'cut' });
+        renderList(); toast('Scene added — pick media for slot ' + (maxSlot + 1) + ' or it shows a placeholder.');
+      };
+      scr.querySelector('#txEdRegen').onclick = function () {
+        recompute();
+        TXGen.start({ tpl: draft, slots: baseState.slots, musicMood: baseState.musicMood, musicFile: baseState.musicFile, quality: baseState.quality });
+      };
+      scr.querySelector('#txEdSaveAs').onclick = function () {
+        recompute();
+        var copy = JSON.parse(JSON.stringify(draft));
+        copy.id = 'custom_' + Date.now().toString(36);
+        copy.custom = true; copy.icon = '🛠️'; copy.title = draft.title + ' (edit)';
+        TX.saveCustom(copy);
+        toast('Saved to My Templates 🎉');
+      };
+      renderList();
+      App.show('screen-txedit');
     }
   };
 })();

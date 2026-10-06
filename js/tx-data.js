@@ -181,16 +181,44 @@
       for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
       return null;
     },
+    creator: function (t) {
+      if (t.by) return t.by;
+      var map = {
+        'glow-reveal': 'Neon Studio', 'velocity': 'Beat Lab', 'noor': 'Noor Edits',
+        'darood': 'Noor Edits', 'dard': 'Dard Edits', 'yaadein': 'Dard Edits',
+        'mohabbat': 'Ishq Edits', 'birthday-drop': 'Party Lab', 'wander': 'Wander Films',
+        'photo-slam': 'Snap Studio', 'cine-cut': 'Cine Lab'
+      };
+      return map[t.id] || 'ViraCut Studio';
+    },
+    /* sort modes: trending | new | popular */
+    sorted: function (mode) {
+      var list = TX.all();
+      if (!window.TXStats) return list;
+      if (mode === 'new') return TXStats.byNew(list);
+      if (mode === 'popular') return TXStats.byPopular(list);
+      return TXStats.byTrending(list);
+    },
+    featured: function () {
+      return TX.sorted('trending').slice(0, 5);
+    },
     categories: function () {
       return [
         { id: 'trending', name: 'Trending', icon: '🔥' },
         { id: 'photo', name: 'Photo', icon: '🖼️' },
-        { id: 'love', name: 'Love', icon: '💖' },
+        { id: 'love', name: 'Love', icon: '❤️' },
+        { id: 'couple', name: 'Couple', icon: '💑' },
         { id: 'cinematic', name: 'Cinematic', icon: '🎬' },
+        { id: 'attitude', name: 'Attitude', icon: '😎' },
+        { id: 'funny', name: 'Funny', icon: '😂' },
+        { id: 'beatsync', name: 'Beat Sync', icon: '🎵' },
+        { id: 'ai', name: 'AI Effects', icon: '✨' },
         { id: 'birthday', name: 'Birthday', icon: '🎂' },
         { id: 'travel', name: 'Travel', icon: '✈️' },
-        { id: 'sad', name: 'Sad / Emotional', icon: '🌧️' },
-        { id: 'islamic', name: 'Islamic', icon: '🌙' },
+        { id: 'sports', name: 'Sports', icon: '🏆' },
+        { id: 'gaming', name: 'Gaming', icon: '🎮' },
+        { id: 'sad', name: 'Sad / Emotional', icon: '💔' },
+        { id: 'islamic', name: 'Islamic', icon: '🕌' },
         { id: 'my', name: 'My Templates', icon: '🛠️' }
       ];
     }

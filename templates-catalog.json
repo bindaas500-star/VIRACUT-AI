@@ -94,7 +94,9 @@
     }
    ],
    "slots": 5,
-   "title": "Eid Mubarak"
+   "title": "Eid Mubarak",
+   "added": "2026-10-06",
+   "by": "ViraCut Studio"
   },
   {
    "aspect": "9:16",
@@ -171,7 +173,9 @@
     }
    ],
    "slots": 4,
-   "title": "Tanhai"
+   "title": "Tanhai",
+   "added": "2026-10-06",
+   "by": "ViraCut Studio"
   },
   {
    "aspect": "9:16",
@@ -252,7 +256,9 @@
     }
    ],
    "slots": 6,
-   "title": "Flash Beat"
+   "title": "Flash Beat",
+   "added": "2026-10-06",
+   "by": "ViraCut Studio"
   },
   {
    "id": "remote_frame_vines",
@@ -280,7 +286,9 @@
    ],
    "overlays": [
     "particles"
-   ]
+   ],
+   "added": "2026-10-06",
+   "by": "ViraCut Studio"
   },
   {
    "id": "remote_frame_arch",
@@ -317,7 +325,9 @@
    ],
    "overlays": [
     "particles"
-   ]
+   ],
+   "added": "2026-10-06",
+   "by": "ViraCut Studio"
   },
   {
    "id": "remote_frame_rose",
@@ -345,9 +355,307 @@
    ],
    "overlays": [
     "particles"
+   ],
+   "added": "2026-10-06",
+   "by": "ViraCut Studio"
+  },
+  {
+   "id": "remote_neon_pulse",
+   "title": "Neon Pulse",
+   "icon": "✨",
+   "category": "ai",
+   "slots": 4,
+   "duration": 10,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Neon Studio",
+   "music": {
+    "name": "Neon Drive (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 2.0,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "neon",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "NEON",
+      "size": 11,
+      "pos": "mid",
+      "color": "#67e8f9",
+      "glow": "#22d3ee",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.0,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.5,
+     "slot": 3,
+     "anim": "kenburns-out",
+     "fx": "neon",
+     "filter": "cool",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.5,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "gloworbs",
+     "filter": "vivid",
+     "trans": "zoom",
+     "text": {
+      "content": "✨ PULSE",
+      "size": 9,
+      "pos": "bottom",
+      "color": "#f0abfc",
+      "glow": "#a855f7",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles",
+    "gloworbs"
+   ]
+  },
+  {
+   "id": "remote_do_dil",
+   "title": "Do Dil",
+   "icon": "💑",
+   "category": "couple",
+   "slots": 5,
+   "duration": 14,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Ishq Edits",
+   "music": {
+    "name": "Tere Naam (AI loop)",
+    "mood": "romantic"
+   },
+   "scenes": [
+    {
+     "dur": 2.5,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "vignette",
+     "filter": "warm",
+     "trans": "fade"
+    },
+    {
+     "dur": 2.5,
+     "slot": 2,
+     "anim": "pan-right",
+     "fx": "none",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "دو دل 💕",
+      "urdu": true,
+      "size": 10,
+      "pos": "mid",
+      "color": "#f9a8d4",
+      "glow": "#ec4899",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3.0,
+     "slot": 3,
+     "anim": "kenburns-in",
+     "fx": "vignette",
+     "filter": "warm",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.0,
+     "slot": 4,
+     "anim": "pan-left",
+     "fx": "none",
+     "filter": "warm",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.0,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "focus",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "ایک کہانی",
+      "urdu": true,
+      "size": 9,
+      "pos": "bottom",
+      "color": "#ffffff",
+      "glow": "#f9a8d4",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "bokeh",
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_champion",
+   "title": "Champion",
+   "icon": "🏆",
+   "category": "sports",
+   "slots": 4,
+   "duration": 10,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Arena Edits",
+   "music": {
+    "name": "Arena Drop (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 1.5,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "CHAMPION",
+      "size": 10,
+      "pos": "mid",
+      "color": "#fde047",
+      "glow": "#f59e0b",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.0,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "shake",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.5,
+     "slot": 3,
+     "anim": "kenburns-out",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 4.0,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "zoom",
+     "text": {
+      "content": "🏆 NEVER GIVE UP",
+      "size": 7,
+      "pos": "bottom",
+      "color": "#ffffff",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_level_up",
+   "title": "Level Up",
+   "icon": "🎮",
+   "category": "gaming",
+   "slots": 5,
+   "duration": 12,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "Pixel Lab",
+   "music": {
+    "name": "Pixel Rush (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 1.8,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "flash",
+     "filter": "cool",
+     "trans": "cut",
+     "text": {
+      "content": "LEVEL UP",
+      "size": 10,
+      "pos": "mid",
+      "color": "#4ade80",
+      "glow": "#16a34a",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.0,
+     "slot": 2,
+     "anim": "pan-right",
+     "fx": "shake",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.2,
+     "slot": 3,
+     "anim": "kenburns-out",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.5,
+     "slot": 4,
+     "anim": "pan-left",
+     "fx": "flash",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 3.5,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "neon",
+     "filter": "vivid",
+     "trans": "zoom",
+     "text": {
+      "content": "🎮 GG",
+      "size": 9,
+      "pos": "bottom",
+      "color": "#4ade80",
+      "glow": "#16a34a",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles",
+    "streak"
    ]
   }
  ],
- "updated": "2026-10-06",
- "version": 2
+ "updated": "2026-10-07",
+ "version": 3
 }

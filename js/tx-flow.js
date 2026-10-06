@@ -242,7 +242,7 @@
     var t = (now - thumbT0) / 1000;
     for (var i = 0; i < thumbs.length; i++) {
       (function (th) {
-        if (!th.cv.isConnected) return;
+        if (!th.cv.isConnected || th.visible === false) return;
         var tpl = th.tpl, g = th.g, W = th.cv.width, H = th.cv.height;
         // loop first 3 scenes (or fewer)
         var n = Math.min(3, tpl.scenes.length), total = 0, j;
@@ -260,29 +260,76 @@
   window.TXThumb = {
     register: function (cv, tpl) {
       var fc = document.createElement('canvas'); fc.width = cv.width; fc.height = cv.height;
-      thumbs.push({ cv: cv, g: cv.getContext('2d'), fx: fc.getContext('2d'), fc: fc, tpl: tpl, ovl: ovlPartsFor(tpl) });
+      var rec = { cv: cv, g: cv.getContext('2d'), fx: fc.getContext('2d'), fc: fc, tpl: tpl, ovl: ovlPartsFor(tpl), visible: true };
+      thumbs.push(rec);
       thumbs = thumbs.filter(function (th) { return th.cv.isConnected; });
+      try {
+        if (!window._txIO) {
+          window._txIO = new IntersectionObserver(function (es) {
+            es.forEach(function (en) { if (en.target._txRec) en.target._txRec.visible = en.isIntersecting; });
+          }, { threshold: 0.12 });
+        }
+        cv._txRec = rec;
+        window._txIO.observe(cv);
+      } catch (e) {}
       if (!thumbRaf) { thumbT0 = performance.now(); thumbRaf = requestAnimationFrame(thumbLoop); }
     },
-    clear: function () { thumbs = []; }
+    clear: function () {
+      try {
+        thumbs.forEach(function (th) { if (window._txIO && th.cv._txRec) window._txIO.unobserve(th.cv); th.cv._txRec = null; });
+      } catch (e) {}
+      thumbs = [];
+    }
   };
 
   /* ================= BROWSE ================= */
-  var txQuery = '', txCat = 'all';
+  var txQuery = '', txCat = 'all', txSort = 'trending';
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
+  function fmtNum(n) {
+    n = Math.round(n);
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return '' + n;
+  }
   function cardEl(tpl) {
-    var b = document.createElement('button');
-    b.className = 'tx-card';
+    var card = document.createElement('div');
+    card.className = 'tx-card';
     var cv = document.createElement('canvas');
     cv.className = 'tx-thumb'; cv.width = 180; cv.height = 240;
+    cv.onclick = function () { TXDetail.open(tpl.id); };
+    var like = document.createElement('button');
+    like.className = 'tx-like' + (window.TXStats && TXStats.liked(tpl.id) ? ' on' : '');
+    like.innerHTML = '❤';
+    like.onclick = function (e) {
+      e.stopPropagation();
+      if (window.TXStats) like.classList.toggle('on', TXStats.toggleLike(tpl.id));
+    };
     var info = document.createElement('div');
     info.className = 'tx-info';
-    info.innerHTML = '<b>' + (tpl.remote ? '🆕 ' : '') + esc(tpl.title) + '</b><small>' + tpl.slots + ' clips · ' + tpl.duration.toFixed(0) + 's</small>';
-    b.appendChild(cv); b.appendChild(info);
-    b.onclick = function () { TXDetail.open(tpl.id); };
+    var uses = window.TXStats ? fmtNum(TXStats.displayUses(tpl.id)) : '';
+    info.innerHTML = '<b>' + (tpl.remote ? '🆕 ' : '') + esc(tpl.title) + '</b>' +
+      '<small>' + tpl.slots + ' clips · ' + tpl.duration.toFixed(0) + 's' + (uses ? ' · ▶ ' + uses : '') + '</small>';
+    card.appendChild(cv); card.appendChild(like); card.appendChild(info);
     TXThumb.register(cv, tpl);
-    return b;
+    return card;
+  }
+  /* featured carousel item: big 9:16 autoplay preview */
+  function featEl(tpl) {
+    var item = document.createElement('div');
+    item.className = 'tx-feat';
+    var cv = document.createElement('canvas');
+    cv.width = 216; cv.height = 340; cv.className = 'tx-feat-cv';
+    var meta = document.createElement('div');
+    meta.className = 'tx-feat-meta';
+    meta.innerHTML = '<b>' + esc(tpl.title) + '</b><small>by ' + esc(TX.creator(tpl)) + ' · ' + tpl.slots + ' clips</small>';
+    var btn = document.createElement('button');
+    btn.className = 'btn primary sm'; btn.textContent = 'Use Template';
+    btn.onclick = function (e) { e.stopPropagation(); TXSlots.open(tpl.id); };
+    item.appendChild(cv); item.appendChild(meta); item.appendChild(btn);
+    item.onclick = function () { TXDetail.open(tpl.id); };
+    TXThumb.register(cv, tpl);
+    return item;
   }
 
   window.TXBrowse = {
@@ -294,11 +341,21 @@
         '<h2 class="page-title">🎭 Templates</h2>' +
         '<p class="page-sub">Pick a style → add your clips → video ready.</p>' +
         '<div class="search-row"><input type="text" id="txSearch" placeholder="Search templates…"></div>' +
+        '<div class="pills" id="txSortPills" style="margin-bottom:6px"></div>' +
         '<div class="pills" id="txCatPills" style="margin-bottom:6px"></div>' +
         '<div id="txSections"></div>' +
         '<div class="card" style="margin-top:14px"><div class="kv"><span>🛠️ <b>Template Creator</b><br><span class="muted">Design your own reusable template</span></span>' +
         '<button class="btn primary sm" id="txGoCreate">Open</button></div></div>' +
         '<p class="fineprint">Original ViraCut designs — timed scenes, smart FX, text & music. Your media stays on your device.</p>';
+      var sorts = [['trending', '🔥 Trending'], ['new', '🆕 New'], ['popular', '❤️ Popular']];
+      var sp = document.getElementById('txSortPills');
+      sorts.forEach(function (s) {
+        var b = document.createElement('button');
+        b.className = 'pill' + (txSort === s[0] ? ' on' : '');
+        b.textContent = s[1];
+        b.onclick = function () { txSort = s[0]; TXBrowse.render(); };
+        sp.appendChild(b);
+      });
       var pills = document.getElementById('txCatPills');
       [{ id: 'all', name: 'All', icon: '✨' }].concat(TX.categories()).forEach(function (c) {
         var b = document.createElement('button');
@@ -332,7 +389,7 @@
         return okC && okQ;
       }
       if (txCat !== 'all' || txQuery) {
-        var list = TX.all().filter(match);
+        var list = TX.sorted(txSort).filter(match);
         var sec = document.createElement('div');
         sec.innerHTML = '<h3 class="sec-title">' + list.length + ' templates</h3>';
         var row = document.createElement('div'); row.className = 'tx-grid';
@@ -342,10 +399,29 @@
         return;
       }
       var self = this;
+      /* featured carousel */
+      try {
+        var feat = TX.featured();
+        if (feat.length) {
+          var fsec = document.createElement('div');
+          fsec.innerHTML = '<h3 class="sec-title">⭐ Featured</h3>';
+          var car = document.createElement('div'); car.className = 'tx-featured';
+          feat.forEach(function (t) { car.appendChild(featEl(t)); });
+          fsec.appendChild(car); host.appendChild(fsec);
+        }
+      } catch (e) {}
+      /* sorted discovery list */
+      var sortTitles = { trending: '🔥 Trending this week', new: '🆕 Newest', popular: '❤️ Most loved' };
+      var sorted = TX.sorted(txSort).slice(0, 12);
+      var ssec = document.createElement('div');
+      ssec.innerHTML = '<h3 class="sec-title" style="margin:14px 0 8px">' + sortTitles[txSort] + '</h3>';
+      var srow = document.createElement('div'); srow.className = 'tx-grid';
+      sorted.forEach(function (t) { srow.appendChild(cardEl(t)); });
+      ssec.appendChild(srow); host.appendChild(ssec);
       var fresh = TX.remote();
-      if (fresh.length) {
+      if (fresh.length && txSort === 'new') {
         var nsec = document.createElement('div');
-        nsec.innerHTML = '<h3 class="sec-title" style="margin:14px 0 8px">🆕 New Arrivals</h3>';
+        nsec.innerHTML = '<h3 class="sec-title" style="margin:14px 0 8px">📥 New Arrivals</h3>';
         var nrow = document.createElement('div'); nrow.className = 'tx-row';
         fresh.forEach(function (t) { nrow.appendChild(cardEl(t)); });
         nsec.appendChild(nrow); host.appendChild(nsec);
@@ -386,9 +462,13 @@
       dtTpl = tpl; dtOvl = ovlPartsFor(tpl); dtStarts = startsFor(tpl);
       var scr = document.getElementById('screen-txdetail');
       var cat = TX.categories().filter(function (c) { return c.id === tpl.category; })[0];
+      var liked = window.TXStats && TXStats.liked(tpl.id);
+      var uses = window.TXStats ? fmtNum(TXStats.displayUses(tpl.id)) : '';
       scr.innerHTML =
         '<button class="back-btn" id="txDtBack">‹ Templates</button>' +
         '<h2 class="page-title">' + tpl.icon + ' ' + esc(tpl.title) + '</h2>' +
+        '<p class="page-sub">by ' + esc(TX.creator(tpl)) + (uses ? ' · ▶ ' + uses + ' uses' : '') +
+        ' <button class="tx-like inline' + (liked ? ' on' : '') + '" id="txDtLike">❤</button></p>' +
         '<div class="tx-detail-wrap"><canvas id="txDtPreview" width="216" height="384"></canvas>' +
         '<div class="tx-meta">' +
         '<div class="meta-row"><small>⏱️ Duration</small><b>' + tpl.duration.toFixed(1) + 's</b></div>' +
@@ -407,6 +487,8 @@
       }
       scr.querySelector('#txDtBack').onclick = function () { App.show('screen-templates'); TXBrowse.render(); };
       scr.querySelector('#txDtUse').onclick = function () { TXSlots.open(tpl.id); };
+      var lk = scr.querySelector('#txDtLike');
+      if (lk) lk.onclick = function () { if (window.TXStats) lk.classList.toggle('on', TXStats.toggleLike(tpl.id)); };
       App.show('screen-txdetail');
       dtFlat = document.createElement('canvas');
       var cv = document.getElementById('txDtPreview');

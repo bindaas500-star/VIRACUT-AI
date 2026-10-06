@@ -247,3 +247,18 @@ audio{width:100%;margin-top:6px}
 .search-row{margin:8px 0}
 .search-row input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--txt);padding:11px 12px;font-size:14px;font-family:inherit}
 .btn.big{padding:15px;font-size:16px;margin:12px 0}
+
+/* ===== Templates upgrade: featured carousel, likes, editor ===== */
+.tx-featured{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.tx-featured::-webkit-scrollbar{display:none}
+.tx-feat{flex:0 0 216px;scroll-snap-align:start;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;cursor:pointer}
+.tx-feat-cv{width:216px;height:340px;display:block;background:#000}
+.tx-feat-meta{padding:10px 12px 4px}
+.tx-feat-meta b{font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx-feat-meta small{color:var(--muted);font-size:11px}
+.tx-feat .btn{margin:8px 12px 12px;width:calc(100% - 24px)}
+.tx-card{position:relative}
+.tx-like{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;opacity:.75}
+.tx-like.on{opacity:1;background:rgba(244,63,94,.85);border-color:#f43f5e}
+.tx-like.inline{position:static;width:auto;height:auto;border-radius:20px;padding:2px 12px;font-size:14px;background:rgba(255,255,255,.08)}
+.tx-like.inline.on{background:rgba(244,63,94,.85)}
