@@ -95,6 +95,7 @@
     );
   }
   function pickFile(cam) {
+    buildScreen(); // file inputs live inside the photo screen
     var inp = document.getElementById(cam ? 'phFileCam' : 'phFile');
     inp.onchange = function () {
       if (inp.files && inp.files[0]) {
