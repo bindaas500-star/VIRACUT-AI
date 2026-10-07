@@ -533,6 +533,14 @@
   /* ================= init ================= */
   function init() {
     try { if (window.I18N) I18N.applyStatic(); } catch (e) {}
+    // native feel: block long-press context menu except in text fields
+    document.addEventListener('contextmenu', function (e) {
+      if (!e.target.closest('input,textarea,[contenteditable]')) e.preventDefault();
+    });
+    // block text selection via long-press drag on UI
+    document.addEventListener('selectstart', function (e) {
+      if (!e.target.closest('input,textarea,[contenteditable]')) e.preventDefault();
+    });
     document.querySelectorAll('#bottomnav button').forEach(function (b) {
       b.onclick = function () {
         var id = b.getAttribute('data-nav');

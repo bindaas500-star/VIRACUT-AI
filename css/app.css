@@ -304,3 +304,10 @@ button.set-row:active{background:rgba(255,255,255,.04)}
 .ph-curve{width:100%;max-width:340px;aspect-ratio:1;border-radius:12px;touch-action:none;display:block;margin:0 auto;background:#14141f}
 .ph-croprow{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}
 .lbl{display:block;font-size:12px;font-weight:700;opacity:.8;margin:10px 0 4px}
+
+/* ===== native app feel: no text selection / callout on long-press ===== */
+* { -webkit-tap-highlight-color: transparent; }
+body, body *, button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+img { -webkit-user-drag: none; pointer-events: none; }
+button img, .ph-fcard img { pointer-events: none; }
