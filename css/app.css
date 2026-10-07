@@ -311,3 +311,8 @@ body, body *, button { -webkit-user-select: none; user-select: none; -webkit-tou
 input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 img { -webkit-user-drag: none; pointer-events: none; }
 button img, .ph-fcard img { pointer-events: none; }
+
+/* ===== native feel: no pull-to-refresh, no double-tap zoom ===== */
+html, body { overscroll-behavior: none; }
+body { touch-action: manipulation; }
+.ph-stage, .ph-curve { touch-action: none; }

@@ -200,6 +200,14 @@
           });
           else toast(t('set.uptodate'));
         } catch (e) { toast(t('set.uptodate')); }
+        // also force the service worker to look for a new app version
+        try {
+          if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.getRegistration().then(function (reg) {
+              if (reg) reg.update();
+            });
+          }
+        } catch (e2) {}
       }
     }
   };
