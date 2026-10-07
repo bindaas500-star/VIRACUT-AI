@@ -237,7 +237,7 @@
           curScene = idx;
           var m = mediaBySlot[sc.slot];
           if (m && m.video) { try { m.el.currentTime = 0; m.el.play(); } catch (e) {} }
-          label.textContent = t('gen.scene', { i: idx + 1, n: tpl.scenes.length });
+          label.textContent = window.t('gen.scene', { i: idx + 1, n: tpl.scenes.length });
         }
         var tr = sc.trans || 'cut';
         if (idx > 0 && tr !== 'cut' && local < TRANS_DUR) {
@@ -274,7 +274,7 @@
           genBlob = new Blob(chunks, { type: 'video/webm' });
           if (genFailed || genBlob.size < 1024) {
             genRunning = false;
-            toast(t('gen.failed', { e: genFailed || ('empty file (' + genBlob.size + ' bytes)') }), true);
+            toast(window.t('gen.failed', { e: genFailed || ('empty file (' + genBlob.size + ' bytes)') }), true);
             return;
           }
           if (genUrl) { try { URL.revokeObjectURL(genUrl); } catch (e) {} }
