@@ -6,7 +6,7 @@
 
   var PL = null; // window.PhotoLab (lazy)
   function lab() { return window.PhotoLab; }
-  function toast(m, e) { if (window.toast) toast(m, e); }
+  function toast(m, e) { if (window.toast) window.toast(m, e); }
 
   var UI = {
     tool: 'adjust', // adjust|filters|hsl|curves|crop
@@ -190,11 +190,21 @@
     stopTracks();
     var v = document.getElementById('phCamVideo');
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFallback(); return; }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: camFacing }, audio: false })
-      .then(function (st) {
-        camStream = st; v.srcObject = st; v.play().catch(function () {});
-      })
-      .catch(function () { camFallback(); });
+    var done = false;
+    var timer = setTimeout(function () {
+      if (!done) { done = true; camFallback('Camera permission nahi mili — gallery se choose karo.'); }
+    }, 9000);
+    function ok(st) {
+      if (done) { try { st.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; }
+      done = true; clearTimeout(timer);
+      camStream = st; v.srcObject = st;
+      try { var p = v.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+    function bad() { if (!done) { done = true; clearTimeout(timer); camFallback(); } }
+    try {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: camFacing }, audio: false })
+        .then(ok, bad);
+    } catch (e) { bad(); }
   }
   function stopTracks() {
     if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
@@ -206,9 +216,9 @@
     var ov = document.getElementById('phCamOver');
     if (ov) ov.style.display = 'none';
   }
-  function camFallback() {
+  function camFallback(msg) {
     stopCamera();
-    toast('Camera nahi khul saka — gallery se choose karo.');
+    toast(msg || 'Camera nahi khul saka — gallery se choose karo.');
     pickFile(true);
   }
   function snapPhoto() {
