@@ -132,12 +132,12 @@
   };
 
   /* ================= GENERATOR ================= */
-  var genRunning = false, genBlob = null, genUrl = null;
+  var genRunning = false, genBlob = null, genUrl = null, genFailed = null;
   var TRANS_DUR = 0.45;
   window.TXGen = {
     start: function (state) {
       if (genRunning) return;
-      genRunning = true;
+      genRunning = true; genFailed = null;
       var tpl = state.tpl, C = TXCore;
       TXGen._lastState = state;
       try { if (window.TXStats) TXStats.use(tpl.id); } catch (e) {}
@@ -264,6 +264,11 @@
         try { actx.close(); } catch (e) {}
         setTimeout(function () {
           genBlob = new Blob(chunks, { type: 'video/webm' });
+          if (genFailed || genBlob.size < 1024) {
+            genRunning = false;
+            toast('Video banane me masla: ' + (genFailed || 'khaali file (' + genBlob.size + ' bytes)') + '. Dobara try karo.', true);
+            return;
+          }
           if (genUrl) { try { URL.revokeObjectURL(genUrl); } catch (e) {} }
           genUrl = URL.createObjectURL(genBlob);
           TXGen.showResult(tpl, total, state);
@@ -283,7 +288,7 @@
           if (!genRunning) return;
           var t = (performance.now() - t0) / 1000;
           if (t >= total) { finish(); return; }
-          try { draw(t); } catch (e) { finish(); return; }
+          try { draw(t); } catch (e) { genFailed = (e && e.message) || 'draw error'; finish(); return; }
           requestAnimationFrame(loop);
         })();
       });

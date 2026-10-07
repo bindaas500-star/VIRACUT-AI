@@ -225,8 +225,6 @@
     im.onload = function () { openPhoto(im, 'camera-photo.jpg', url); };
     im.src = url;
   }
-  window.PhotoUI.openCamera = openCamera;
-
   /* ================= render ================= */
   function drawToScreen() {
     var cv = document.getElementById('phCanvas');
@@ -315,7 +313,7 @@
   }
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
-  window.PhotoUI = { openPhoto: openPhoto, importDialog: importDialog, refreshAll: UI.refreshAll, refresh: UI.refresh, UI: UI };
+  window.PhotoUI = { openPhoto: openPhoto, importDialog: importDialog, openCamera: openCamera, refreshAll: UI.refreshAll, refresh: UI.refresh, UI: UI };
 })();
 
 /* ================= panels ================= */
