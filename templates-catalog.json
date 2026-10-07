@@ -20,7 +20,7 @@
    "scenes": [
     {
      "anim": "slow-zoom",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "warm",
      "fx": "reveal",
      "slot": 1,
@@ -37,7 +37,7 @@
     },
     {
      "anim": "kenburns-in",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "warm",
      "fx": "vignette",
      "slot": 2,
@@ -54,7 +54,7 @@
     },
     {
      "anim": "pan-left",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "warm",
      "fx": "punch",
      "slot": 3,
@@ -71,7 +71,7 @@
     },
     {
      "anim": "kenburns-out",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "warm",
      "fx": "none",
      "slot": 4,
@@ -79,7 +79,7 @@
     },
     {
      "anim": "static",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "warm",
      "fx": "focus",
      "slot": 5,
@@ -116,7 +116,7 @@
    "scenes": [
     {
      "anim": "slow-zoom",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "mono",
      "fx": "vignette",
      "slot": 1,
@@ -133,7 +133,7 @@
     },
     {
      "anim": "pan-right",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "cool",
      "fx": "grain",
      "slot": 2,
@@ -150,7 +150,7 @@
     },
     {
      "anim": "kenburns-out",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "mono",
      "fx": "vignette",
      "slot": 3,
@@ -158,7 +158,7 @@
     },
     {
      "anim": "static",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "mono",
      "fx": "focus",
      "slot": 4,
@@ -241,7 +241,7 @@
     },
     {
      "anim": "slow-zoom",
-     "dur": 3.0,
+     "dur": 3,
      "filter": "vivid",
      "fx": "neon",
      "slot": 6,
@@ -376,7 +376,7 @@
    },
    "scenes": [
     {
-     "dur": 2.0,
+     "dur": 2,
      "slot": 1,
      "anim": "kenburns-in",
      "fx": "neon",
@@ -392,7 +392,7 @@
      }
     },
     {
-     "dur": 2.0,
+     "dur": 2,
      "slot": 2,
      "anim": "pan-left",
      "fx": "flash",
@@ -471,7 +471,7 @@
      }
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 3,
      "anim": "kenburns-in",
      "fx": "vignette",
@@ -479,7 +479,7 @@
      "trans": "fade"
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 4,
      "anim": "pan-left",
      "fx": "none",
@@ -487,7 +487,7 @@
      "trans": "fade"
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 5,
      "anim": "slow-zoom",
      "fx": "focus",
@@ -542,7 +542,7 @@
      }
     },
     {
-     "dur": 2.0,
+     "dur": 2,
      "slot": 2,
      "anim": "pan-left",
      "fx": "shake",
@@ -558,7 +558,7 @@
      "trans": "cut"
     },
     {
-     "dur": 4.0,
+     "dur": 4,
      "slot": 4,
      "anim": "slow-zoom",
      "fx": "flash",
@@ -610,7 +610,7 @@
      }
     },
     {
-     "dur": 2.0,
+     "dur": 2,
      "slot": 2,
      "anim": "pan-right",
      "fx": "shake",
@@ -672,7 +672,7 @@
    },
    "scenes": [
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 1,
      "anim": "slow-zoom",
      "fx": "vignette",
@@ -680,7 +680,7 @@
      "trans": "fade"
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 2,
      "anim": "kenburns-in",
      "fx": "none",
@@ -705,7 +705,7 @@
      "trans": "fade"
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 4,
      "anim": "kenburns-out",
      "fx": "vignette",
@@ -751,7 +751,7 @@
    },
    "scenes": [
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 1,
      "anim": "slow-zoom",
      "fx": "vignette",
@@ -768,7 +768,7 @@
      }
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 2,
      "anim": "pan-left",
      "fx": "grain",
@@ -776,7 +776,7 @@
      "trans": "cut"
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 3,
      "anim": "kenburns-in",
      "fx": "vignette",
@@ -784,7 +784,7 @@
      "trans": "fade"
     },
     {
-     "dur": 3.0,
+     "dur": 3,
      "slot": 4,
      "anim": "slow-zoom",
      "fx": "focus",
@@ -852,7 +852,7 @@
      }
     },
     {
-     "dur": 2.0,
+     "dur": 2,
      "slot": 4,
      "anim": "pan-right",
      "fx": "punch",
@@ -879,8 +879,272 @@
    "overlays": [
     "particles"
    ]
+  },
+  {
+   "id": "remote_beatstorm",
+   "title": "Beatstorm",
+   "icon": "⚡",
+   "category": "beatsync",
+   "slots": 8,
+   "duration": 14,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Velocity Bass (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 1.5,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "BEAT DROP",
+      "size": 11,
+      "pos": "mid",
+      "color": "#ffffff",
+      "glow": "#f43f5e",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 1.5,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 1.5,
+     "slot": 3,
+     "anim": "kenburns-out",
+     "fx": "shake",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 1.5,
+     "slot": 4,
+     "anim": "pan-right",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 1.5,
+     "slot": 5,
+     "anim": "kenburns-in",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "🔥",
+      "size": 12,
+      "pos": "mid",
+      "color": "#ffffff",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 1.5,
+     "slot": 6,
+     "anim": "pan-left",
+     "fx": "shake",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 2,
+     "slot": 7,
+     "anim": "kenburns-out",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 3,
+     "slot": 8,
+     "anim": "slow-zoom",
+     "fx": "neon",
+     "filter": "vivid",
+     "trans": "zoom",
+     "text": {
+      "content": "BEATSTORM",
+      "size": 9,
+      "pos": "bottom",
+      "color": "#67e8f9",
+      "glow": "#22d3ee",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles",
+    "streak"
+   ]
+  },
+  {
+   "id": "remote_birthday_glow",
+   "title": "Birthday Glow",
+   "icon": "🎂",
+   "category": "birthday",
+   "slots": 5,
+   "duration": 15,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Candle Light (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 3,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "reveal",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "HAPPY BIRTHDAY",
+      "size": 11,
+      "pos": "mid",
+      "color": "#fde68a",
+      "glow": "#f59e0b",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 3,
+     "slot": 2,
+     "anim": "kenburns-in",
+     "fx": "vignette",
+     "filter": "warm",
+     "trans": "fade"
+    },
+    {
+     "dur": 3,
+     "slot": 3,
+     "anim": "pan-right",
+     "fx": "none",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "🎂 MAKE A WISH",
+      "size": 8,
+      "pos": "bottom",
+      "color": "#ffffff",
+      "glow": "#fbbf24",
+      "anim": "fadeup"
+     }
+    },
+    {
+     "dur": 3,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "gloworbs",
+     "filter": "vivid",
+     "trans": "fade"
+    },
+    {
+     "dur": 3,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "neon",
+     "filter": "warm",
+     "trans": "zoom",
+     "text": {
+      "content": "🥳 SHINE BRIGHT",
+      "size": 9,
+      "pos": "mid",
+      "color": "#fbcfe8",
+      "glow": "#ec4899",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "confetti",
+    "gloworbs"
+   ]
+  },
+  {
+   "id": "remote_wanderlust",
+   "title": "Wanderlust",
+   "icon": "🧳",
+   "category": "travel",
+   "slots": 4,
+   "duration": 12,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-07",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Open Road (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 3,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "vignette",
+     "filter": "vivid",
+     "trans": "fade",
+     "text": {
+      "content": "WANDER",
+      "size": 12,
+      "pos": "mid",
+      "color": "#ffffff",
+      "glow": "#38bdf8",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "none",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 3,
+     "slot": 3,
+     "anim": "kenburns-out",
+     "fx": "grain",
+     "filter": "mono",
+     "trans": "cut"
+    },
+    {
+     "dur": 3,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "focus",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "✈️ JOURNEY",
+      "size": 8,
+      "pos": "bottom",
+      "color": "#fef3c7",
+      "glow": "#f59e0b",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
   }
  ],
  "updated": "2026-10-07",
- "version": 4
+ "version": 5
 }
