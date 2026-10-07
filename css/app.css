@@ -203,6 +203,9 @@ audio{width:100%;margin-top:6px}
   display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--txt);cursor:pointer}
 .fx-btn .fx-ic{font-size:22px}
 .fx-btn.on{background:var(--grad);border-color:transparent;color:#fff}
+.fx-btn.pro{border:1px dashed #c9a227;position:relative}
+.fx-btn.pro .fx-ic{filter:saturate(.6)}
+.fx-lock{font-size:12px;position:absolute;top:4px;right:6px}
 .tpl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 .tpl-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;
   display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;cursor:pointer;color:var(--txt)}

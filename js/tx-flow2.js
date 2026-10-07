@@ -337,6 +337,22 @@
       return '<option value="' + o.id + '"' + (o.id === cur ? ' selected' : '') + '>' + esc(o.name) + '</option>';
     }).join('');
   }
+  // FX dropdown options with 🔒 on Pro effects; returns '' for none.
+  function fxOpts(cur) {
+    return FX.list().map(function (f) {
+      return '<option value="' + f.id + '"' + (f.id === cur ? ' selected' : '') + '>' +
+        f.icon + ' ' + esc(f.name) + (f.pro ? ' 🔒' : '') + '</option>';
+    }).join('');
+  }
+  // Guard: block selecting a Pro effect in template creator/editor.
+  function guardProFx(sel, prevVal) {
+    if (window.FX && FX.isPro && FX.isPro(sel.value)) {
+      toast(window.t ? t('fx.pro_locked') : '🔒 Pro effect — coming soon in ViraCut Pro');
+      sel.value = prevVal || 'punch';
+      return false;
+    }
+    return true;
+  }
   function crSceneBox(n) {
     var d = document.createElement('div');
     d.className = 'scene-box';
@@ -348,7 +364,7 @@
       '<div><label class="lbl">Duration (s)</label><input type="number" data-f="dur" min="0.5" max="10" step="0.5" value="1.2"></div>' +
       '<div><label class="lbl">Animation</label><select data-f="anim">' + crSelOpts(TXANIMS, 'kenburns-in') + '</select></div>' +
       '<div><label class="lbl">Effect</label><select data-f="fx">' +
-      FX.list().map(function (f) { return '<option value="' + f.id + '"' + (f.id === 'punch' ? ' selected' : '') + '>' + f.icon + ' ' + esc(f.name) + '</option>'; }).join('') + '</select></div>' +
+      fxOpts('punch') + '</select></div>' +
       '<div><label class="lbl">Filter</label><select data-f="filter">' +
       Object.keys(TXFILTERS).map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('') + '</select></div>' +
       '<div><label class="lbl">Transition in</label><select data-f="trans">' + crSelOpts(TXTRANS, 'cut') + '</select></div>' +
@@ -357,6 +373,8 @@
       '<div><label class="lbl">Text color</label><input type="color" data-f="tcolor" value="#ffffff" style="height:38px"></div>' +
       '</div>';
     d.querySelector('[data-del]').onclick = function () { d.remove(); TXCreate.renumber(); };
+    // block Pro FX selection in creator scene boxes
+    d.querySelector('[data-f="fx"]').onchange = function () { guardProFx(this, 'punch'); };
     return d;
   }
   window.TXCreate = {
@@ -413,6 +431,7 @@
         var dur = Math.min(10, Math.max(0.5, parseFloat(v('dur')) || 1.2));
         maxSlot = Math.max(maxSlot, slot);
         var sc = { slot: slot, dur: dur, anim: v('anim'), fx: v('fx'), filter: v('filter'), trans: v('trans') };
+        if (window.FX && FX.isPro && FX.isPro(sc.fx)) sc.fx = 'punch'; // Pro FX not selectable yet
         var tx = v('text').trim();
         if (tx) sc.text = { content: tx, pos: v('tpos'), color: v('tcolor'), size: 8, anim: 'pop' };
         scenes.push(sc);
@@ -467,7 +486,7 @@
         '<button class="btn ghost sm" data-dur="0.5">＋</button></div></div>' +
         '<div><label class="lbl">Animation</label><select data-f="anim">' + selOpts(TXANIMS, sc.anim) + '</select></div>' +
         '<div><label class="lbl">Effect</label><select data-f="fx">' +
-        FX.list().map(function (f) { return '<option value="' + f.id + '"' + (f.id === sc.fx ? ' selected' : '') + '>' + f.icon + ' ' + esc(f.name) + '</option>'; }).join('') + '</select></div>' +
+        fxOpts(sc.fx) + '</select></div>' +
         '<div><label class="lbl">Filter</label><select data-f="filter">' +
         Object.keys(TXFILTERS).map(function (k) { return '<option value="' + k + '"' + (k === sc.filter ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select></div>' +
         '<div><label class="lbl">Transition in</label><select data-f="trans">' + selOpts(TXTRANS, sc.trans || 'cut') + '</select></div>' +
@@ -488,6 +507,7 @@
       d.querySelectorAll('[data-f]').forEach(function (el) {
         el.onchange = function () {
           var f = el.getAttribute('data-f');
+          if (f === 'fx' && !guardProFx(el, sc.fx)) return;
           if (f === 'slot') sc.slot = Math.max(1, parseInt(el.value, 10) || 1);
           else if (f === 'text') {
             var v = el.value.trim();
