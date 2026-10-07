@@ -186,8 +186,16 @@
   var ORDER = ['none', 'punch', 'shake', 'mirror', 'flash', 'glitch', 'focus', 'neon', 'vignette', 'grain', 'vintage', 'reveal', 'gloworbs', 'streak', 'smoke'];
 
   window.FX = {
+    // FX Engine v2: plugins register via FX.register(id, def).
+    // def: { name, icon, pro?, pre?, post?, over? } — same hook shape as core.
+    register: function (id, def) {
+      if (!id || !def || R[id]) return false;
+      R[id] = def; ORDER.push(id);
+      return true;
+    },
+    isPro: function (id) { return !!(R[id] && R[id].pro); },
     list: function () {
-      return ORDER.map(function (id) { return { id: id, name: R[id].name, icon: R[id].icon }; });
+      return ORDER.map(function (id) { return { id: id, name: R[id].name, icon: R[id].icon, pro: !!R[id].pro }; });
     },
     get: function (id) { return R[id] || R.none; }
   };

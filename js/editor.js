@@ -745,9 +745,11 @@
     grid.className = 'fx-grid';
     FX.list().forEach(function (f) {
       var b = document.createElement('button');
-      b.className = 'fx-btn' + ((c.fx || 'none') === f.id ? ' on' : '');
-      b.innerHTML = '<span class="fx-ic">' + f.icon + '</span><span>' + f.name + '</span>';
+      b.className = 'fx-btn' + ((c.fx || 'none') === f.id ? ' on' : '') + (f.pro ? ' pro' : '');
+      b.innerHTML = '<span class="fx-ic">' + f.icon + '</span><span>' + f.name + '</span>' +
+        (f.pro ? '<span class="fx-lock">🔒</span>' : '');
       b.onclick = function () {
+        if (f.pro) { toast(window.t ? t('fx.pro_locked') : '🔒 Pro effect — coming soon in ViraCut Pro'); return; }
         c.fx = f.id === 'none' ? undefined : f.id;
         self.snapshot(); Store.persist(); self.drawOnce(); self.renderTimeline(); self.renderPanel();
       };
