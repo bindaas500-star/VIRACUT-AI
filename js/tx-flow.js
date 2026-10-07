@@ -243,6 +243,7 @@
     for (var i = 0; i < thumbs.length; i++) {
       (function (th) {
         if (!th.cv.isConnected || th.visible === false) return;
+        try {
         var tpl = th.tpl, g = th.g, W = th.cv.width, H = th.cv.height;
         // loop first 3 scenes (or fewer)
         var n = Math.min(3, tpl.scenes.length), total = 0, j;
@@ -253,6 +254,7 @@
           acc += tpl.scenes[j].dur;
         }
         composeScene(g, th.fx, th.fc, tpl, th.ovl, {}, idx, local, t, W, H);
+        } catch (e) {}
       })(thumbs[i]);
     }
     thumbRaf = requestAnimationFrame(thumbLoop);
@@ -262,7 +264,6 @@
       var fc = document.createElement('canvas'); fc.width = cv.width; fc.height = cv.height;
       var rec = { cv: cv, g: cv.getContext('2d'), fx: fc.getContext('2d'), fc: fc, tpl: tpl, ovl: ovlPartsFor(tpl), visible: true };
       thumbs.push(rec);
-      thumbs = thumbs.filter(function (th) { return th.cv.isConnected; });
       try {
         if (!window._txIO) {
           window._txIO = new IntersectionObserver(function (es) {
