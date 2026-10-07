@@ -240,10 +240,14 @@
           }
         }
       }
-      // text overlays
+      // text overlays (Pro kinetic-text FX hook)
       var self = this;
+      var kfx = (window.FX && found) ? FX.get(found.item.clip.fx) : null;
       p.texts.forEach(function (tx) {
-        if (t >= tx.start && t <= tx.end) self.drawText(g, tx, W, H);
+        if (t >= tx.start && t <= tx.end) {
+          if (kfx && kfx.kineticText) kfx.kineticText(g, tx, W, H, t);
+          else self.drawText(g, tx, W, H);
+        }
       });
       // captions
       var cap = Captions.at(t);

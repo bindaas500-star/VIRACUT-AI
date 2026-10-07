@@ -220,6 +220,199 @@
     });
   }
 
+  /* ============ Step 4: Kinetic Urdu Text FX (PRO) ============
+   * Animates the project's text overlays word-by-word with a golden glow
+   * when the current clip uses this effect. The core composite loop calls
+   * fx.kineticText(g, tx, W, H, t) instead of the static drawText.
+   * Pure function of (t, word index) — deterministic for export.
+   */
+  function easeOutBack(x) {
+    x = Math.max(0, Math.min(1, x));
+    var c = 1.70158;
+    return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2);
+  }
+  function kineticText(g, tx, W, H, t) {
+    var fs = Math.round((tx.size || 5) * W / 100);
+    var y = tx.position === 'top' ? H * 0.14 : tx.position === 'bottom' ? H * 0.82 : H * 0.5;
+    var words = String(tx.text).split(' ').filter(Boolean);
+    if (!words.length) return;
+    g.save();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '800 ' + fs + 'px sans-serif';
+    // wrap words into lines
+    var lines = [], line = [];
+    words.forEach(function (w) {
+      var trial = line.concat([w]).join(' ');
+      if (g.measureText(trial).width > W * 0.88 && line.length) { lines.push(line); line = [w]; }
+      else line.push(w);
+    });
+    if (line.length) lines.push(line);
+    var lh = fs * 1.35, y0 = y - (lines.length - 1) * lh / 2;
+    var wi = 0, li, wj;
+    for (li = 0; li < lines.length; li++) {
+      var lineW = g.measureText(lines[li].join(' ')).width;
+      var x = W / 2 - lineW / 2, widths = [];
+      for (wj = 0; wj < lines[li].length; wj++) widths.push(g.measureText(lines[li][wj]).width);
+      var sp = g.measureText(' ').width;
+      for (wj = 0; wj < lines[li].length; wj++, wi++) {
+        (function (word, wx, idx) {
+          var appear = idx * 0.22, lt = t - (tx.start || 0) - appear;
+          if (lt < 0) return;
+          var p = Math.min(1, lt / 0.45), s = easeOutBack(p);
+          var breathe = 1 + 0.025 * Math.sin(t * 3 + idx * 0.7);
+          g.save();
+          g.globalAlpha = Math.min(1, lt / 0.25);
+          g.translate(wx + widths[wj] / 2, y0 + li * lh - (1 - p) * fs * 0.5);
+          g.scale(s * breathe, s * breathe);
+          g.shadowColor = 'rgba(255,190,70,0.95)'; g.shadowBlur = 22;
+          g.fillStyle = tx.color || '#ffffff';
+          g.fillText(word, 0, 0);
+          g.shadowBlur = 0;
+          g.fillStyle = 'rgba(255,255,255,0.9)';
+          g.globalAlpha = Math.min(1, lt / 0.25) * 0.35;
+          g.fillText(word, 0, 0);
+          g.restore();
+        })(lines[li][wj], x, wi);
+        x += widths[wj] + sp;
+      }
+    }
+    g.restore();
+  }
+
+  if (window.FX && window.FX.register) {
+    window.FX.register('kinetic_text', {
+      name: 'Kinetic Text', icon: '✨', pro: true,
+      kineticText: kineticText,
+      // hint drawn when a clip uses it but no text overlay is active
+      over: function () {}
+    });
+  }
+
+  /* ============ Step 5: Pro motion FX (PRO) ============
+   * RGB Split Pro (animated chromatic fringe), Whip Pan and Zoom Spin
+   * (transition-style openers that fire at the clip's start).
+   */
+  function s5prog(item, t) { return Math.max(0, Math.min(1, (t - item.start) / Math.max(0.01, item.end - item.start))); }
+  function s5ease(x) { x = Math.max(0, Math.min(1, x)); return 1 - Math.pow(1 - x, 3); }
+
+  if (window.FX && window.FX.register) {
+    // 👾 RGB Split Pro — animated chromatic aberration
+    window.FX.register('rgbpro', {
+      name: 'RGB Split Pro', icon: '👾', pro: true,
+      post: function (g, off, c, item, W, H, t) {
+        var f = Math.floor(t * 24);
+        var d = (2 + prnd(f * 3.7) * 9) * (prnd(f * 9.1) > 0.5 ? 1 : -1);
+        g.save();
+        g.drawImage(off, -d, 0, W, H);
+        g.globalCompositeOperation = 'lighter';
+        g.globalAlpha = 0.55;
+        try { g.filter = 'sepia(1) saturate(4) hue-rotate(-45deg)'; } catch (e) {}
+        g.drawImage(off, d, 0, W, H);
+        try { g.filter = 'sepia(1) saturate(4) hue-rotate(190deg)'; } catch (e) {}
+        g.drawImage(off, 0, d * 0.6, W, H);
+        g.restore();
+      }
+    });
+    // 🌪️ Whip Pan — fast slide + streaks at clip start
+    window.FX.register('whip', {
+      name: 'Whip Pan', icon: '🌪️', pro: true,
+      pre: function (g, c, item, W, H, t) {
+        var p = s5prog(item, t);
+        if (p < 0.35) {
+          var k = s5ease(p / 0.35), dx = (1 - k) * W * 0.7;
+          g.translate(dx, 0);
+        }
+      },
+      over: function (g, c, item, W, H, t) {
+        var p = s5prog(item, t);
+        if (p < 0.35) {
+          var k = 1 - p / 0.35, i;
+          g.save(); g.globalAlpha = 0.35 * k;
+          g.fillStyle = '#fff';
+          for (i = 0; i < 14; i++) {
+            var y = prnd(i * 17.3 + Math.floor(t * 24)) * H;
+            g.fillRect(0, y, W, 2 + prnd(i * 5.1) * 5);
+          }
+          g.restore();
+        }
+      }
+    });
+    // 🌀 Zoom Spin — spin + zoom opener
+    window.FX.register('zoomspin', {
+      name: 'Zoom Spin', icon: '🌀', pro: true,
+      pre: function (g, c, item, W, H, t) {
+        var p = s5prog(item, t);
+        if (p < 0.5) {
+          var k = s5ease(p / 0.5), z = 1 + (1 - k) * 1.6, r = (1 - k) * 0.5;
+          g.translate(W / 2, H / 2); g.rotate(r); g.scale(z, z); g.translate(-W / 2, -H / 2);
+        }
+      }
+    });
+  }
+
+  /* ============ Step 6: Chroma Key (PRO) ============
+   * Green-screen removal at half resolution for speed, soft edge mask.
+   */
+  var _ckTmp = null;
+  function ckCanvas(w, h) {
+    if (!_ckTmp) _ckTmp = document.createElement('canvas');
+    if (_ckTmp.width !== w || _ckTmp.height !== h) { _ckTmp.width = w; _ckTmp.height = h; }
+    return _ckTmp;
+  }
+
+  if (window.FX && window.FX.register) {
+    window.FX.register('chroma', {
+      name: 'Chroma Key', icon: '💚', pro: true,
+      post: function (g, off, c, item, W, H, t) {
+        var sw = 360, sh = Math.max(2, Math.round(360 * H / W));
+        var tmp = ckCanvas(sw, sh), tg = tmp.getContext('2d');
+        tg.drawImage(off, 0, 0, sw, sh);
+        var img;
+        try { img = tg.getImageData(0, 0, sw, sh); } catch (e) { g.drawImage(off, 0, 0, W, H); return; }
+        var d = img.data, i, n = d.length;
+        for (i = 0; i < n; i += 4) {
+          var r = d[i], gg = d[i + 1], b = d[i + 2];
+          // green dominance factor 0..1
+          var f = Math.min(1, Math.max(0, (gg - Math.max(r, b) - 18) / 70));
+          if (gg > 60 && f > 0) d[i + 3] = Math.round(255 * (1 - f));
+        }
+        tg.putImageData(img, 0, 0);
+        g.save();
+        g.drawImage(tmp, 0, 0, W, H);
+        g.restore();
+      }
+    });
+
+    /* ============ Step 7: Portrait Blur / Focus Blur (PRO) ============
+     * Tilt-shift look: sharp center band, blurred top & bottom.
+     */
+    window.FX.register('focusblur', {
+      name: 'Focus Blur', icon: '📷', pro: true,
+      post: function (g, off, c, item, W, H, t) {
+        g.save();
+        g.drawImage(off, 0, 0, W, H);
+        var tmp = ckCanvas(W, H), tg = tmp.getContext('2d');
+        tg.save();
+        tg.clearRect(0, 0, W, H);
+        try { tg.filter = 'blur(' + Math.max(4, Math.round(Math.min(W, H) * 0.028)) + 'px)'; } catch (e) {}
+        tg.drawImage(off, 0, 0, W, H);
+        tg.restore();
+        tg.globalCompositeOperation = 'destination-in';
+        var gr = tg.createLinearGradient(0, 0, 0, H);
+        gr.addColorStop(0, 'rgba(0,0,0,1)');
+        gr.addColorStop(0.30, 'rgba(0,0,0,1)');
+        gr.addColorStop(0.42, 'rgba(0,0,0,0)');
+        gr.addColorStop(0.58, 'rgba(0,0,0,0)');
+        gr.addColorStop(0.70, 'rgba(0,0,0,1)');
+        gr.addColorStop(1, 'rgba(0,0,0,1)');
+        tg.fillStyle = gr; tg.fillRect(0, 0, W, H);
+        tg.globalCompositeOperation = 'source-over';
+        g.drawImage(tmp, 0, 0, W, H);
+        g.restore();
+      }
+    });
+  }
+
   /* Hook beat analysis into music import (non-invasive wrapper). */
   function hookMusic() {
     if (!window.AudioLab || !AudioLab.Music || AudioLab.Music._beatHooked) return;
