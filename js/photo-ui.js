@@ -89,7 +89,7 @@
       '</div>',
       function (root) {
         root.querySelector('#piGallery').onclick = function () { App.closeModal(); pickFile(false); };
-        root.querySelector('#piCamera').onclick = function () { App.closeModal(); pickFile(true); };
+        root.querySelector('#piCamera').onclick = function () { App.closeModal(); openCamera(); };
         root.querySelector('#piRecent').onclick = function () { App.closeModal(); openRecentSheet(); };
       }
     );
@@ -158,6 +158,74 @@
     toast('Project saved ✓');
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  /* ================= in-app camera ================= */
+  var camStream = null, camFacing = 'environment';
+  function openCamera() {
+    buildScreen();
+    var ov = document.getElementById('phCamOver');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'phCamOver'; ov.className = 'ph-camover';
+      ov.innerHTML =
+        '<video id="phCamVideo" playsinline muted></video>' +
+        '<div class="ph-cambar">' +
+          '<button class="icon-btn big" id="phCamClose">✕</button>' +
+          '<button class="ph-shutter" id="phCamShot"></button>' +
+          '<button class="icon-btn big" id="phCamFlip">⇄</button>' +
+        '</div>';
+      document.getElementById('screen-photo').appendChild(ov);
+      ov.querySelector('#phCamClose').onclick = stopCamera;
+      ov.querySelector('#phCamShot').onclick = snapPhoto;
+      ov.querySelector('#phCamFlip').onclick = function () {
+        camFacing = camFacing === 'environment' ? 'user' : 'environment';
+        startCam();
+      };
+    }
+    ov.style.display = 'block';
+    App.show('screen-photo');
+    startCam();
+  }
+  function startCam() {
+    stopTracks();
+    var v = document.getElementById('phCamVideo');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFallback(); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: camFacing }, audio: false })
+      .then(function (st) {
+        camStream = st; v.srcObject = st; v.play().catch(function () {});
+      })
+      .catch(function () { camFallback(); });
+  }
+  function stopTracks() {
+    if (camStream) { camStream.getTracks().forEach(function (t) { t.stop(); }); camStream = null; }
+    var v = document.getElementById('phCamVideo');
+    if (v) v.srcObject = null;
+  }
+  function stopCamera() {
+    stopTracks();
+    var ov = document.getElementById('phCamOver');
+    if (ov) ov.style.display = 'none';
+  }
+  function camFallback() {
+    stopCamera();
+    toast('Camera nahi khul saka — gallery se choose karo.');
+    pickFile(true);
+  }
+  function snapPhoto() {
+    var v = document.getElementById('phCamVideo');
+    if (!v || !v.videoWidth) { toast('Camera tayyar nahi.', true); return; }
+    var c = document.createElement('canvas');
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    var g = c.getContext('2d');
+    if (camFacing === 'user') { g.translate(c.width, 0); g.scale(-1, 1); } // mirror fix
+    g.drawImage(v, 0, 0);
+    var url = c.toDataURL('image/jpeg', 0.92);
+    stopCamera();
+    var im = new Image();
+    im.onload = function () { openPhoto(im, 'camera-photo.jpg', url); };
+    im.src = url;
+  }
+  window.PhotoUI.openCamera = openCamera;
 
   /* ================= render ================= */
   function drawToScreen() {
