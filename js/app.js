@@ -99,6 +99,7 @@
   /* ================= HOME ================= */
   var HOME_BTNS = [
     { ic: '🎬', t: 'Create Video', s: 'new project', go: function () { Projects.newProjectDialog(); } },
+    { ic: '📸', t: 'Photo Editor', s: 'PixMaster inside', go: function () { if (window.PhotoUI) PhotoUI.importDialog(); } },
     { ic: '✨', t: 'AI Video Generator', s: 'prompt → video', go: function () { App.show('screen-aivideo'); } },
     { ic: '🖼️', t: 'Photo to Video', s: 'slideshow', go: function () { App.show('screen-photovideo'); } },
     { ic: '✍️', t: 'AI Story', s: 'idea → script', go: function () { App.show('screen-aistory'); } },
@@ -136,6 +137,7 @@
     var box = document.getElementById('createOptions');
     var opts = [
       { ic: '🎬', t: 'New video project', s: 'Import clips & edit on the timeline', go: function () { Projects.newProjectDialog(); } },
+      { ic: '📸', t: 'Photo editor', s: 'Adjust, filters, crop & export', go: function () { if (window.PhotoUI) PhotoUI.importDialog(); } },
       { ic: '🖼️', t: 'Photo to video', s: 'Slideshow with Ken Burns motion', go: function () { App.show('screen-photovideo'); } },
       { ic: '✨', t: 'AI video generator', s: 'Describe it — AI renders it (needs API)', go: function () { App.show('screen-aivideo'); } },
       { ic: '🎭', t: 'Templates', s: 'One-tap original styles — add your clips', go: function () { App.show('screen-templates'); renderTemplates(); } },
