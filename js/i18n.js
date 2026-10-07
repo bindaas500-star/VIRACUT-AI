@@ -44,7 +44,11 @@
       'set.name': 'Name', 'set.save': 'Save', 'set.cancel': 'Cancel',
       'set.delete_data': 'Delete my local data', 'set.delete_confirm': 'All local data (projects, settings) will be deleted. Continue?',
       'set.fb_title': 'Send feedback', 'set.fb_ph': 'Write your feedback…', 'set.fb_send': 'Send',
-      'set.terms_title': 'Terms and Policies'
+      'set.terms_title': 'Terms and Policies',
+      'cam.notready': 'Camera not ready.',
+      'cam.failed': "Couldn't open the camera \u2014 choose from gallery.",
+      'cam.noperm': 'Camera permission not granted \u2014 choose from gallery.',
+      'gen.failed': 'Video failed: {e}. Please try again.'
     },
     ur: {
       'nav.home': 'ہوم', 'nav.create': 'بنائیں', 'nav.templates': 'ٹیمپلیٹس',
@@ -86,7 +90,11 @@
       'set.name': 'نام', 'set.save': 'محفوظ کریں', 'set.cancel': 'منسوخ کریں',
       'set.delete_data': 'میرا مقامی ڈیٹا ڈیلیٹ کریں', 'set.delete_confirm': 'سارا مقامی ڈیٹا (پروجیکٹس، سیٹنگز) ڈیلیٹ ہو جائے گا۔ جاری رکھیں؟',
       'set.fb_title': 'فیڈبیک بھیجیں', 'set.fb_ph': 'اپنی رائے لکھیں…', 'set.fb_send': 'بھیجیں',
-      'set.terms_title': 'شرائط و پالیسیز'
+      'set.terms_title': 'شرائط و پالیسیز',
+      'cam.notready': 'کیمرہ تیار نہیں ہے۔',
+      'cam.failed': 'کیمرہ نہیں کھل سکا — گیلری سے منتخب کریں۔',
+      'cam.noperm': 'کیمرہ کی اجازت نہیں ملی — گیلری سے منتخب کریں۔',
+      'gen.failed': 'ویڈیو بنانے میں مسئلہ: {e}۔ دوبارہ کوشش کریں۔'
     }
   };
   function lang() {

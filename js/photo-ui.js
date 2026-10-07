@@ -192,7 +192,7 @@
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { camFallback(); return; }
     var done = false;
     var timer = setTimeout(function () {
-      if (!done) { done = true; camFallback('Camera permission nahi mili — gallery se choose karo.'); }
+      if (!done) { done = true; camFallback(t('cam.noperm')); }
     }, 9000);
     function ok(st) {
       if (done) { try { st.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; }
@@ -218,12 +218,12 @@
   }
   function camFallback(msg) {
     stopCamera();
-    toast(msg || 'Camera nahi khul saka — gallery se choose karo.');
+    toast(msg || t('cam.failed'));
     pickFile(true);
   }
   function snapPhoto() {
     var v = document.getElementById('phCamVideo');
-    if (!v || !v.videoWidth) { toast('Camera tayyar nahi.', true); return; }
+    if (!v || !v.videoWidth) { toast(t('cam.notready'), true); return; }
     var c = document.createElement('canvas');
     c.width = v.videoWidth; c.height = v.videoHeight;
     var g = c.getContext('2d');

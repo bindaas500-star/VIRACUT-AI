@@ -266,7 +266,7 @@
           genBlob = new Blob(chunks, { type: 'video/webm' });
           if (genFailed || genBlob.size < 1024) {
             genRunning = false;
-            toast('Video banane me masla: ' + (genFailed || 'khaali file (' + genBlob.size + ' bytes)') + '. Dobara try karo.', true);
+            toast(t('gen.failed', { e: genFailed || ('empty file (' + genBlob.size + ' bytes)') }), true);
             return;
           }
           if (genUrl) { try { URL.revokeObjectURL(genUrl); } catch (e) {} }
