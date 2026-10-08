@@ -43,6 +43,14 @@
       (p.stickers || []).forEach(function (s) { s.keyframes = s.keyframes || []; });
       // Phase 8: timeline effect segments
       p.effects = p.effects || [];
+      // Phase 11: normalize legacy transitionIn + caption styles
+      p.clips.forEach(function (c) {
+        if (c.transitionIn === 'crossfade') c.transitionIn = { type: 'fade', dur: 0.5 };
+        else if (c.transitionIn === 'none') c.transitionIn = null;
+      });
+      p.captions.forEach(function (cp) {
+        cp.style = cp.style || { size: 1, color: '#ffffff', bg: '#000000', bgOp: 0.72, pos: 'bottom' };
+      });
       this.project = p;
       this.vidEls = new Map(); this.imgEls = new Map(); this.stills = new Map();
       this.thumbStrips = new Map(); this.ovEls = new Map();
@@ -51,6 +59,8 @@
       this.selOvId = null; this.selTxId = null; this.selFxId = null;
       this._fxPreview = null; // {fxId, params} temporary live preview (not committed)
       this._fxPhotoPreview = null; // {target:'clip'|'overlay', id, fxId, params}
+      this._transClipId = null; // Phase 11: clip id for transition picker (from junction tap)
+      this._selCapId = null; // Phase 11: selected caption id
       // Phase 7: keyframe session state
       this._kfSel = null; this._kfDrag = null; this._kfDragTarget = null;
       this._kfPointers = {}; this._kfPinchD = 0;
@@ -344,29 +354,15 @@
       }
       var item = found.item, idx = found.index;
       // crossfade: previous clip end-still dissolving
-      var xf = item.clip.transitionIn === 'crossfade' && idx > 0 && (t - item.start) < XF;
-      this.drawClipFX(g, item, W, H, t);
+      var L2 = window.EditorLogic;
+      var tr = (idx > 0) ? L2.transitionAt(item.clip.transitionIn, t - item.start) : null;
+      if (tr) {
+        this.drawTransition(g, W, H, t, tr, Store.timing().items[idx - 1], item);
+      } else {
+        this.drawClipFX(g, item, W, H, t);
+      }
       // Phase 9: crop mode overlay (preview only — never in export)
       if (!forExport && this.cropModeId === item.clip.id) this.drawCropOverlay(g, W, H);
-      if (xf) {
-        var prev = Store.timing().items[idx - 1];
-        var still = this.stills.get(prev.clip.id);
-        var a = 1 - (t - item.start) / XF;
-        if (still) {
-          var im = new Image(); // cached by browser; stills are dataURLs
-          // draw via temp image each frame is wasteful — use preloaded
-          var pre = this._stillImgs || (this._stillImgs = {});
-          if (!pre[prev.clip.id] || pre[prev.clip.id]._src !== still) {
-            var ni = new Image(); ni._src = still; ni.src = still; pre[prev.clip.id] = ni;
-          }
-          var sim = pre[prev.clip.id];
-          if (sim.complete && sim.naturalWidth) {
-            g.save(); g.globalAlpha = Math.max(0, Math.min(1, a));
-            this.drawCover(g, sim, W, H);
-            g.restore();
-          }
-        }
-      }
       // text overlays (Pro kinetic-text FX hook)
       var self = this;
       var kfx = (window.FX && found) ? FX.get(found.item.clip.fx) : null;
@@ -376,16 +372,19 @@
           else self.drawText(g, tx, W, H);
         }
       });
-      // captions
+      // captions (Phase 11: per-caption styling)
       var cap = Captions.at(t);
       if (cap) {
+        var cs = cap.style || { size: 1, color: '#ffffff', bg: '#000000', bgOp: 0.72, pos: 'bottom' };
         g.save();
-        g.font = '700 ' + Math.round(W * 0.045) + 'px sans-serif'; g.textAlign = 'center';
+        var fs = Math.round(W * 0.045 * (cs.size || 1));
+        g.font = '700 ' + fs + 'px sans-serif'; g.textAlign = 'center';
         var tw = Math.min(W * 0.9, g.measureText(cap.text).width + 36);
-        var bw = tw, bh = W * 0.075, bx = (W - bw) / 2, by = H - bh - H * 0.06;
-        g.fillStyle = 'rgba(0,0,0,.72)';
+        var bw = tw, bh = fs * 1.7, bx = (W - bw) / 2;
+        var by = window.EditorLogic.captionY(cs.pos, H, bh);
+        g.fillStyle = Editor._hexA(cs.bg || '#000000', cs.bgOp == null ? 0.72 : cs.bgOp);
         g.beginPath(); g.roundRect(bx, by, bw, bh, 12); g.fill();
-        g.fillStyle = '#fff';
+        g.fillStyle = cs.color || '#ffffff';
         g.fillText(cap.text, W / 2, by + bh * 0.68, W * 0.88);
         g.restore();
       }
@@ -545,6 +544,45 @@
           this.drawClipMedia(g, item.clip, item, W, H, t, 1);
         }
         if (fx.over) { g.save(); fx.over(g, item.clip, item, W, H, t); g.restore(); }
+      }
+    },
+    /* Phase 11: cached end-frame still image for a clip id (for transitions) */
+    _stillImg: function (id) {
+      var still = this.stills.get(id);
+      if (!still) return null;
+      var pre = this._stillImgs || (this._stillImgs = {});
+      if (!pre[id] || pre[id]._src !== still) {
+        var ni = new Image(); ni._src = still; ni.src = still; pre[id] = ni;
+      }
+      var sim = pre[id];
+      return (sim.complete && sim.naturalWidth) ? sim : null;
+    },
+    /* Phase 11: render a transition between prevItem (outgoing) and item (incoming).
+       tr = {type:'fade'|'slide'|'zoom'|'wipe', dur, p:0..1}. Shared by preview & export. */
+    drawTransition: function (g, W, H, t, tr, prevItem, item) {
+      var p = Math.max(0, Math.min(1, tr.p));
+      var sim = prevItem ? this._stillImg(prevItem.clip.id) : null;
+      function drawPrev() {
+        if (sim) { g.save(); this.drawCover(g, sim, W, H); g.restore(); }
+      }
+      if (tr.type === 'fade') {
+        drawPrev.call(this);
+        g.save(); g.globalAlpha = p; this.drawClipFX(g, item, W, H, t); g.restore();
+      } else if (tr.type === 'slide') {
+        g.save(); g.translate(-p * W, 0); drawPrev.call(this); g.restore();
+        g.save(); g.translate((1 - p) * W, 0); this.drawClipFX(g, item, W, H, t); g.restore();
+      } else if (tr.type === 'zoom') {
+        drawPrev.call(this);
+        var s = 1.4 - 0.4 * p;
+        g.save(); g.globalAlpha = p;
+        g.translate(W / 2, H / 2); g.scale(s, s); g.translate(-W / 2, -H / 2);
+        this.drawClipFX(g, item, W, H, t); g.restore();
+      } else if (tr.type === 'wipe') {
+        drawPrev.call(this);
+        g.save(); g.beginPath(); g.rect(0, 0, Math.max(0, p * W), H); g.clip();
+        this.drawClipFX(g, item, W, H, t); g.restore();
+      } else {
+        this.drawClipFX(g, item, W, H, t);
       }
     },
     drawClipMedia: function (g, clip, item, W, H, t, alpha) {
@@ -831,6 +869,21 @@
     /* clip playback duration after speed */
     playDur: function (clip) {
       return Math.max(0.1, (clip.out - clip.in)) / (clip.speed || 1);
+    },
+    /* Phase 11: transition progress. tr = clip.transitionIn ({type,dur}|null), dt = t - clipStart.
+       Returns {type, dur, p} (p 0..1) or null. Handles legacy 'crossfade'/'none' strings. */
+    transitionAt: function (tr, dt) {
+      if (!tr || tr === 'none') return null;
+      if (tr === 'crossfade') tr = { type: 'fade', dur: 0.5 };
+      if (!tr.type || !(tr.dur > 0)) return null;
+      if (dt < 0 || dt >= tr.dur) return null;
+      return { type: tr.type, dur: tr.dur, p: dt / tr.dur };
+    },
+    /* Phase 11: caption vertical anchor for pos 'top'|'center'|'bottom' given canvas H and box height */
+    captionY: function (pos, H, bh) {
+      if (pos === 'top') return H * 0.08;
+      if (pos === 'center') return (H - bh) / 2;
+      return H - bh - H * 0.06; // bottom
     },
     /* split point m (media seconds) -> [aIn,aOut,bIn,bOut] */
     splitBounds: function (clip, m) {
@@ -1241,6 +1294,8 @@
     if (c.keyframes) nc.keyframes = c.keyframes.map(function (kf) { return Object.assign({}, kf); });
     // Phase 9: deep copy crop so edits don't leak between copies
     if (c.crop) nc.crop = { x: c.crop.x, y: c.crop.y, w: c.crop.w, h: c.crop.h };
+    // Phase 11: deep copy transitionIn (now an object)
+    if (nc.transitionIn && typeof nc.transitionIn === 'object') nc.transitionIn = { type: nc.transitionIn.type, dur: nc.transitionIn.dur };
     if (c.type === 'audio') {
       var buf = this.audioBufs.get(c.id);
       if (buf) this.audioBufs.set(nc.id, buf);
@@ -1438,6 +1493,22 @@
         if (self.selClipId === c.id && it) self._kfDiamonds(blk, c, it.start, it.end, pps);
         blk.addEventListener('pointerdown', function (e) { self.onCardDown(e, c, blk, i); });
         vTrack.appendChild(blk);
+        // Phase 11: transition junction badge (tap → transition picker for this clip)
+        if (i > 0) {
+          (function (cc, bx) {
+            var jb = document.createElement('div');
+            var hasTr = cc.transitionIn && cc.transitionIn !== 'none';
+            jb.className = 'tl-trans' + (hasTr ? ' on' : '');
+            jb.style.left = Math.round(bx - 11) + 'px';
+            jb.textContent = '⋈';
+            jb.title = 'Transition into this clip';
+            jb.addEventListener('click', function (e) {
+              e.stopPropagation();
+              self._transClipId = cc.id; self.setTool('transition');
+            });
+            vTrack.appendChild(jb);
+          })(c, gx);
+        }
         if (c.type === 'video' && c.url && !self.thumbStrips.get(c.id)) self.captureThumbStrip(c, gw);
       });
       // "+" tile at end of video track
@@ -1457,6 +1528,9 @@
     this._renderOverlayLane(oTrack, pps);
     /* ---- EFFECT LANE (Phase 8) ---- */
     this._renderEffectLane(fxTrack0, pps);
+    /* ---- CAPTIONS LANE (Phase 11) ---- */
+    var cpTrack = document.getElementById('edTrackCaptions');
+    if (cpTrack) { cpTrack.innerHTML = ''; this._renderCaptionsLane(cpTrack, pps); }
 
     this.renderClipStrip();
     this.positionPlayhead();
@@ -1613,6 +1687,100 @@
       }
       el.appendChild(d);
     });
+  };
+
+  /* Phase 11: hex color + opacity -> rgba() string */
+  Editor._hexA = function (hex, op) {
+    var h = String(hex || '#000000').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var r = parseInt(h.slice(0, 2), 16) || 0, g = parseInt(h.slice(2, 4), 16) || 0, b = parseInt(h.slice(4, 6), 16) || 0;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + Math.max(0, Math.min(1, op == null ? 1 : op)) + ')';
+  };
+
+  /* Phase 11: captions lane — blocks positioned by time, tap to edit */
+  Editor._renderCaptionsLane = function (el, pps) {
+    var self = this, p = this.project, L = window.EditorLogic;
+    if (!p.captions.length) {
+      el.appendChild(this._addTile(function () { self.setTool('captions'); }));
+      return;
+    }
+    p.captions.forEach(function (c) {
+      var g = L.laneGeom(c.start, Math.max(0.5, c.end - c.start), pps);
+      var d = document.createElement('div');
+      d.className = 'cp-block' + (self._selCapId === c.id ? ' sel' : '');
+      d.style.left = Math.round(g.x) + 'px';
+      d.style.width = Math.max(28, Math.round(g.w)) + 'px';
+      d.textContent = '💬 ' + String(c.text || '').slice(0, 16);
+      d.title = String(c.text || 'Caption');
+      d.addEventListener('click', function (e) {
+        e.stopPropagation();
+        self._selCapId = c.id;
+        self.renderTimeline(); self.captionDialog(c);
+      });
+      el.appendChild(d);
+    });
+  };
+
+  /* Phase 11: caption edit dialog — text, timing sliders, style */
+  Editor.captionDialog = function (c) {
+    var self = this, st = c.style || { size: 1, color: '#ffffff', bg: '#000000', bgOp: 0.72, pos: 'bottom' };
+    var total = Store.timing().total || 10;
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+    App.modal('<h3>💬 Caption</h3>' +
+      '<label class="lbl">Text</label><input type="text" id="cdT" value="' + esc(c.text) + '">' +
+      '<div class="row"><div style="flex:1"><label class="lbl">Start: <span id="cdSV">' + c.start.toFixed(1) + 's</span></label>' +
+      '<input type="range" id="cdS" min="0" max="' + total.toFixed(1) + '" step="0.1" value="' + c.start + '" style="width:100%"></div></div>' +
+      '<div class="row"><div style="flex:1"><label class="lbl">End: <span id="cdEV">' + c.end.toFixed(1) + 's</span></label>' +
+      '<input type="range" id="cdE" min="0" max="' + total.toFixed(1) + '" step="0.1" value="' + c.end + '" style="width:100%"></div></div>' +
+      '<div class="row"><div style="flex:1"><label class="lbl">Size</label>' +
+      '<input type="range" id="cdSize" min="0.6" max="2" step="0.1" value="' + (st.size || 1) + '" style="width:100%"></div></div>' +
+      '<label class="lbl">Text color</label><div class="row" id="cdCol">' +
+      ['#ffffff', '#000000', '#ffd60a', '#ff453a', '#0a84ff', '#30d158'].map(function (col) {
+        return '<button class="sw" data-c="' + col + '" style="background:' + col + ';width:36px;height:36px;border-radius:50%;border:' + (st.color === col ? '3px solid #8B5CF6' : '1px solid #444') + '"></button>';
+      }).join('') + '</div>' +
+      '<label class="lbl">Position</label><div class="pills" id="cdPos">' +
+      ['top', 'center', 'bottom'].map(function (p) {
+        return '<button class="pill' + (st.pos === p ? ' on' : '') + '" data-p="' + p + '">' + p + '</button>';
+      }).join('') + '</div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" id="cdOk" style="flex:1">Save</button>' +
+      '<button class="btn danger" id="cdDel">Delete</button><button class="btn ghost" id="cdNo">Cancel</button></div>',
+      function (root) {
+        var col = st.color || '#ffffff', pos = st.pos || 'bottom';
+        root.querySelector('#cdS').oninput = function () { root.querySelector('#cdSV').textContent = (+this.value).toFixed(1) + 's'; };
+        root.querySelector('#cdE').oninput = function () { root.querySelector('#cdEV').textContent = (+this.value).toFixed(1) + 's'; };
+        root.querySelectorAll('#cdCol .sw').forEach(function (b) {
+          b.onclick = function () {
+            col = b.getAttribute('data-c');
+            root.querySelectorAll('#cdCol .sw').forEach(function (x) { x.style.border = '1px solid #444'; });
+            b.style.border = '3px solid #8B5CF6';
+          };
+        });
+        root.querySelectorAll('#cdPos .pill').forEach(function (b) {
+          b.onclick = function () {
+            pos = b.getAttribute('data-p');
+            root.querySelectorAll('#cdPos .pill').forEach(function (x) { x.classList.remove('on'); });
+            b.classList.add('on');
+          };
+        });
+        root.querySelector('#cdNo').onclick = App.closeModal;
+        root.querySelector('#cdDel').onclick = function () {
+          Captions.remove(c.id); self._selCapId = null;
+          App.closeModal(); self.renderTimeline(); self.drawOnce(); self.renderPanel();
+        };
+        root.querySelector('#cdOk').onclick = function () {
+          var t = root.querySelector('#cdT').value.trim();
+          if (!t) { toast('Enter caption text.', true); return; }
+          var s = +root.querySelector('#cdS').value, e = +root.querySelector('#cdE').value;
+          if (e <= s) e = s + 0.5;
+          Captions.update(c.id, {
+            text: t, start: +s.toFixed(2), end: +e.toFixed(2),
+            style: { size: +root.querySelector('#cdSize').value, color: col, bg: st.bg || '#000000', bgOp: st.bgOp == null ? 0.72 : st.bgOp, pos: pos }
+          });
+          self._selCapId = null;
+          App.closeModal(); self.renderTimeline(); self.drawOnce(); self.renderPanel();
+          toast('Caption saved.');
+        };
+      });
   };
 
   /* trim an effect segment's start/end via handles */
