@@ -265,21 +265,66 @@
     });
   };
 
-  /* ---------- TRANSITION ---------- */
+  /* ---------- TRANSITION (Phase 11: real transitions) ---------- */
   Editor.panel_transition = function (el) {
-    var self = this, c = this.selClip();
-    if (!c) { el.innerHTML = '<p class="hint">Select a clip first.</p>'; return; }
-    var idx = this.project.clips.indexOf(c);
-    if (idx === 0) { el.innerHTML = '<p class="hint">The first clip has no incoming transition — select a later clip.</p>'; return; }
+    var self = this, p = this.project;
+    var c = null;
+    if (this._transClipId) {
+      for (var i = 0; i < p.clips.length; i++) if (p.clips[i].id === this._transClipId) c = p.clips[i];
+    }
+    if (!c) c = this.selClip();
+    if (!c) { el.innerHTML = '<p class="hint">Select a clip first, or tap the ⋈ badge between two clips.</p>'; return; }
+    var idx = p.clips.indexOf(c);
+    if (idx <= 0) { el.innerHTML = '<p class="hint">The first clip has no incoming transition — select a later clip or tap a ⋈ junction.</p>'; return; }
+    var cur = c.transitionIn && c.transitionIn !== 'none' ? c.transitionIn : null;
+    if (cur === 'crossfade') cur = { type: 'fade', dur: 0.5 };
+    var curType = cur ? cur.type : 'none', curDur = cur ? cur.dur : 0.5;
+    var types = [
+      { id: 'fade', label: '🌫️ Fade', desc: 'Cross-dissolve' },
+      { id: 'slide', label: '➡️ Slide', desc: 'Push left' },
+      { id: 'zoom', label: '🔍 Zoom', desc: 'Scale through' },
+      { id: 'wipe', label: '🧹 Wipe', desc: 'Reveal L→R' }
+    ];
+    var durs = [0.5, 1, 1.5, 2];
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
     el.appendChild(h(
       '<h4>⋈ Transition into — ' + esc(c.name) + '</h4>' +
-      '<div class="pills"><button class="pill' + (c.transitionIn !== 'crossfade' ? ' on' : '') + '" id="trNone">None (cut)</button>' +
-      '<button class="pill' + (c.transitionIn === 'crossfade' ? ' on' : '') + '" id="trX">Crossfade 0.5s</button></div>' +
-      '<p class="muted" style="margin-top:8px">Blends the end of the previous clip into this one in preview & export.</p>'
+      '<div class="fx-grid" style="grid-template-columns:repeat(2,1fr)">' +
+      types.map(function (t) {
+        return '<button class="fx-tile' + (curType === t.id ? ' sel' : '') + '" data-tr="' + t.id + '">' +
+          '<span class="fx-ic">' + t.label.split(' ')[0] + '</span><span class="fx-nm">' + t.label.split(' ').slice(1).join(' ') + '</span>' +
+          '<span class="muted" style="font-size:10px">' + t.desc + '</span></button>';
+      }).join('') + '</div>' +
+      '<h4 style="margin-top:10px">Duration</h4><div class="pills">' +
+      durs.map(function (d) {
+        return '<button class="pill' + (cur && curDur === d ? ' on' : '') + '" data-dur="' + d + '">' + d + 's</button>';
+      }).join('') + '</div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" id="trApply" style="flex:1">Apply</button>' +
+      '<button class="btn ghost" id="trNone">None</button></div>' +
+      '<p class="muted" style="margin-top:8px">Preview & export both render the transition.</p>'
     ));
-    function set(v) { c.transitionIn = v; self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); self.renderPanel(); }
-    el.querySelector('#trNone').onclick = function () { set('none'); };
-    el.querySelector('#trX').onclick = function () { set('crossfade'); };
+    var selType = curType === 'none' ? 'fade' : curType, selDur = curDur;
+    el.querySelectorAll('[data-tr]').forEach(function (b) {
+      b.onclick = function () {
+        selType = b.getAttribute('data-tr');
+        el.querySelectorAll('[data-tr]').forEach(function (x) { x.classList.remove('sel'); });
+        b.classList.add('sel');
+      };
+    });
+    el.querySelectorAll('[data-dur]').forEach(function (b) {
+      b.onclick = function () {
+        selDur = +b.getAttribute('data-dur');
+        el.querySelectorAll('[data-dur]').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
+      };
+    });
+    function done() { self._transClipId = null; self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); self.renderPanel(); }
+    el.querySelector('#trApply').onclick = function () {
+      c.transitionIn = { type: selType, dur: selDur }; done(); toast('Transition applied: ' + selType + ' ' + selDur + 's.');
+    };
+    el.querySelector('#trNone').onclick = function () {
+      c.transitionIn = null; done(); toast('Transition removed.');
+    };
   };
 
   /* ---------- FX BROWSER (Phase 8: effects browser + timeline segments) ---------- */
@@ -819,6 +864,12 @@
       var n = Captions.autoFromScript();
       if (n) { self.drawOnce(); self.renderPanel(); toast(n + ' captions created from script.'); }
     };
+    // Phase 11: honest auto-transcribe (needs speech-to-text API)
+    var atBtn = document.createElement('button');
+    atBtn.className = 'btn ghost sm'; atBtn.textContent = '🎙️ Auto-transcribe';
+    atBtn.style.opacity = '0.55';
+    atBtn.onclick = function () { toast('Auto captions need a speech-to-text API — not configured. Use manual captions or Auto from script.', true); };
+    d.querySelector('.row').appendChild(atBtn);
     d.querySelector('#cpClear').onclick = function () {
       App.confirm('Clear all captions?', function (ok) { if (ok) { Captions.clear(); self.drawOnce(); self.renderPanel(); } });
     };
