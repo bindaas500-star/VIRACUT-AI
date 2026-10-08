@@ -41,12 +41,16 @@
       p.texts.forEach(function (tx) { tx.keyframes = tx.keyframes || []; });
       p.overlays.forEach(function (ov) { ov.keyframes = ov.keyframes || []; });
       (p.stickers || []).forEach(function (s) { s.keyframes = s.keyframes || []; });
+      // Phase 8: timeline effect segments
+      p.effects = p.effects || [];
       this.project = p;
       this.vidEls = new Map(); this.imgEls = new Map(); this.stills = new Map();
       this.thumbStrips = new Map(); this.ovEls = new Map();
       this.t = 0; this.playing = false; this.selClipId = null; this.tool = null;
       this.trimModeId = null;
-      this.selOvId = null; this.selTxId = null;
+      this.selOvId = null; this.selTxId = null; this.selFxId = null;
+      this._fxPreview = null; // {fxId, params} temporary live preview (not committed)
+      this._fxPhotoPreview = null; // {target:'clip'|'overlay', id, fxId, params}
       // Phase 7: keyframe session state
       this._kfSel = null; this._kfDrag = null; this._kfDragTarget = null;
       this._kfPointers = {}; this._kfPinchD = 0;
@@ -393,6 +397,8 @@
       }
       // overlays (photo/video picture-in-picture)
       self.drawOverlays(g, W, H, t);
+      // Phase 8: timeline effect segments + live preview effect (preview & export share this path)
+      self.drawEffectSegments(g, W, H, t);
       g.restore();
     },
     drawOverlays: function (g, W, H, t) {
@@ -426,13 +432,85 @@
         var s = escale * W / mw;
         var dw = mw * s, dh = mh * s;
         // cover-fit into a 16:9-ish box? No — draw natural aspect
-        try { g.drawImage(media, -dw / 2, -dh / 2, dw, dh); } catch (e) {}
+        // Phase 8: photo effect on overlay — render to offscreen, apply, draw back
+        var pfx = (ov.type === 'photo' && ov.photoFx && window.FXLIB) ? FXLIB.get(ov.photoFx) : null;
+        if (pfx) {
+          try {
+            var ocv = document.createElement('canvas');
+            ocv.width = Math.max(2, Math.round(dw)); ocv.height = Math.max(2, Math.round(dh));
+            var og2 = ocv.getContext('2d');
+            if (pfx.css) {
+              var sharp = document.createElement('canvas'); sharp.width = ocv.width; sharp.height = ocv.height;
+              sharp.getContext('2d').drawImage(media, 0, 0, ocv.width, ocv.height);
+              og2.filter = pfx.css; og2.drawImage(sharp, 0, 0); og2.filter = 'none';
+            } else {
+              og2.drawImage(media, 0, 0, ocv.width, ocv.height);
+            }
+            if (pfx.draw) pfx.draw(og2, ocv.width, ocv.height, t, ov, ov.photoFxParams || {});
+            g.drawImage(ocv, -dw / 2, -dh / 2, dw, dh);
+          } catch (e) { try { g.drawImage(media, -dw / 2, -dh / 2, dw, dh); } catch (e2) {} }
+        } else {
+          try { g.drawImage(media, -dw / 2, -dh / 2, dw, dh); } catch (e) {}
+        }
         if (self.selOvId === ov.id) {
           g.strokeStyle = '#8B5CF6'; g.lineWidth = 3;
           g.strokeRect(-dw / 2, -dh / 2, dw, dh);
         }
         g.restore();
       });
+    },
+    /* Phase 8: render timeline effect segments active at t, in order (later = on top).
+       Also renders the temporary live-preview effect (_fxPreview). Shared by
+       preview and export, so committed effects are baked into the video. */
+    drawEffectSegments: function (g, W, H, t) {
+      var p = this.project;
+      if (window.FXLIB && p && p.effects && p.effects.length) {
+        FXLIB.renderSegments(g, W, H, t, p.effects);
+      }
+      var pv = this._fxPreview;
+      if (window.FXLIB && pv) {
+        var def = FXLIB.get(pv.fxId);
+        if (def && def.apply) {
+          try { def.apply(g, W, H, t, { start: 0, dur: 9999, params: pv.params }, null); } catch (e) {}
+        }
+      }
+      // Phase 8: photo effects on selected photo clip / overlay
+      this.drawPhotoFx(g, W, H, t);
+    },
+    /* apply item.photoFx for the photo clip under t (photo overlays handled in drawOverlays) */
+    drawPhotoFx: function (g, W, H, t) {
+      if (!window.FXLIB) return;
+      // live photo-effect preview (not committed yet)
+      var pp = this._fxPhotoPreview;
+      if (pp && pp.target === 'clip') {
+        var pdc = FXLIB.get(pp.fxId);
+        if (pdc) { this._applyPhotoFxToFrame(g, W, H, t, pdc, pp.params); return; }
+      }
+      var found = window.Store ? Store.clipAt(t) : null;
+      if (!found || found.item.clip.type !== 'photo' || !found.item.clip.photoFx) return;
+      var pd = FXLIB.get(found.item.clip.photoFx);
+      if (!pd) return;
+      this._applyPhotoFxToFrame(g, W, H, t, pd, found.item.clip.photoFxParams || {});
+    },
+    _applyPhotoFxToFrame: function (g, W, H, t, pd, Pp) {
+      try {
+        var snap = document.createElement('canvas'); snap.width = W; snap.height = H;
+        snap.getContext('2d').drawImage(g.canvas, 0, 0, W, H);
+        g.save();
+        // Photo Motion: slow Ken Burns zoom (time-based, deterministic)
+        if (pd.id === 'p_motion') {
+          var zm = Pp.intensity == null ? 15 : Pp.intensity;
+          var z = 1 + (zm / 100) * (0.5 + 0.5 * (t % 6) / 6);
+          var sw = W / z, sh = H / z;
+          g.drawImage(snap, (W - sw) / 2, (H - sh) / 2, sw, sh, 0, 0, W, H);
+        } else if (pd.css) {
+          g.filter = pd.css; g.drawImage(snap, 0, 0, W, H); g.filter = 'none';
+        } else {
+          g.drawImage(snap, 0, 0, W, H);
+        }
+        if (pd.draw) pd.draw(g, W, H, t, null, Pp);
+        g.restore();
+      } catch (e) {}
     },
     drawClipFX: function (g, item, W, H, t) {
       // Smart FX wrapper: pre-transforms, pixel post-processing, overlays.
@@ -1077,10 +1155,13 @@
     var aTrack = document.getElementById('edTrackAudio');
     var tTrack = document.getElementById('edTrackText');
     var oTrack = document.getElementById('edTrackOverlay');
+    var fxTrack0 = document.getElementById('edTrackEffect');
     var inner = document.getElementById('edTlInner');
     var markers = document.getElementById('edMarkers');
     var p = this.project;
-    vTrack.innerHTML = ''; aTrack.innerHTML = ''; tTrack.innerHTML = ''; oTrack.innerHTML = ''; markers.innerHTML = '';
+    vTrack.innerHTML = ''; aTrack.innerHTML = ''; tTrack.innerHTML = ''; oTrack.innerHTML = '';
+    if (fxTrack0) fxTrack0.innerHTML = '';
+    markers.innerHTML = '';
     this._tlGeom = [];
     var pps = this.zoomPps, hw = this.headW();
     var L = window.EditorLogic;
@@ -1140,6 +1221,8 @@
     this._renderTextLane(tTrack, pps);
     /* ---- OVERLAY LANE (single) ---- */
     this._renderOverlayLane(oTrack, pps);
+    /* ---- EFFECT LANE (Phase 8) ---- */
+    this._renderEffectLane(fxTrack0, pps);
 
     this.renderClipStrip();
     this.positionPlayhead();
@@ -1183,7 +1266,7 @@
       hasAny = true;
       var g2 = L.laneGeom(item.start, item.end - item.start, pps);
       var d = block(g2.x, g2.w, '', self.selClipId === c.id, function () {
-        self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
+        self.selClipId = c.id; self.selOvId = null; self.selTxId = null; self.selFxId = null;
         self._kfSel = null;
         self.setTool(null); self.renderTimeline(); self.drawOnce();
       });
@@ -1225,7 +1308,7 @@
       d.textContent = 'T ' + String(tx.text || '').slice(0, 14);
       d.addEventListener('click', function (e) {
         e.stopPropagation();
-        self.selTxId = tx.id; self.selClipId = null; self.selOvId = null;
+        self.selTxId = tx.id; self.selClipId = null; self.selOvId = null; self.selFxId = null;
         self._kfSel = null; self.renderKfBtn();
         self.renderTimeline(); self.textDialog(tx);
       });
@@ -1250,13 +1333,102 @@
       d.title = String(ov.name || 'overlay');
       d.addEventListener('click', function (e) {
         e.stopPropagation();
-        self.selOvId = ov.id; self.selClipId = null; self.selTxId = null;
+        self.selOvId = ov.id; self.selClipId = null; self.selTxId = null; self.selFxId = null;
         self._kfSel = null; self.renderKfBtn();
         self.renderTimeline(); self.setTool('overlay');
       });
       if (self.selOvId === ov.id) self._kfDiamonds(d, ov, ov.start, ov.start + ov.dur, pps);
       el.appendChild(d);
     });
+  };
+
+  /* Phase 8: EFFECT LANE — timeline segments for applied effects */
+  Editor._renderEffectLane = function (el, pps) {
+    var self = this, p = this.project, L = window.EditorLogic;
+    var fxl = document.getElementById('edTrackEffect');
+    if (fxl) fxl.innerHTML = '';
+    el = fxl || el;
+    if (!p.effects || !p.effects.length) {
+      el.appendChild(this._addTile(function () { self.setTool('fx'); }));
+      return;
+    }
+    p.effects.forEach(function (sg) {
+      var g = L.laneGeom(sg.start, Math.max(0.5, sg.dur), pps);
+      var d = document.createElement('div');
+      d.className = 'fx-seg' + (self.selFxId === sg.id ? ' sel' : '');
+      d.style.left = Math.round(g.x) + 'px';
+      d.style.width = Math.max(28, Math.round(g.w)) + 'px';
+      var def = window.FXLIB ? FXLIB.get(sg.fxId) : null;
+      d.textContent = '✨ ' + String(sg.name || (def ? def.name : 'Effect')).slice(0, 16);
+      d.title = String(sg.name || 'Effect');
+      d.addEventListener('click', function (e) {
+        e.stopPropagation();
+        self.selFxId = sg.id; self.selClipId = null; self.selTxId = null; self.selOvId = null;
+        self._kfSel = null; self.renderKfBtn();
+        self.renderTimeline(); self.setTool('fx_adjust');
+      });
+      // drag to move
+      d.addEventListener('pointerdown', function (e) { self._fxSegDrag(e, sg, d, pps); });
+      // trim handles on selected segment
+      if (self.selFxId === sg.id) {
+        var hl = document.createElement('div'); hl.className = 'trim-handle l'; hl.title = 'Trim start';
+        var hr = document.createElement('div'); hr.className = 'trim-handle r'; hr.title = 'Trim end';
+        hl.addEventListener('pointerdown', function (e) { e.stopPropagation(); self._fxSegTrim(e, sg, 'l', pps); });
+        hr.addEventListener('pointerdown', function (e) { e.stopPropagation(); self._fxSegTrim(e, sg, 'r', pps); });
+        d.appendChild(hl); d.appendChild(hr);
+      }
+      el.appendChild(d);
+    });
+  };
+
+  /* trim an effect segment's start/end via handles */
+  Editor._fxSegTrim = function (e, sg, which, pps) {
+    var self = this;
+    if (e.button) return;
+    var sx = e.clientX, oStart = sg.start, oDur = sg.dur, pid = e.pointerId;
+    function mv(ev) {
+      if (ev.pointerId !== pid) return;
+      var dt = (ev.clientX - sx) / pps;
+      if (which === 'l') {
+        var ns = Math.max(0, Math.round((oStart + dt) * 100) / 100);
+        var nd = Math.round((oDur - (ns - oStart)) * 100) / 100;
+        if (nd >= 0.5) { sg.start = ns; sg.dur = nd; }
+      } else {
+        sg.dur = Math.max(0.5, Math.round((oDur + dt) * 100) / 100);
+      }
+      self.renderTimeline(); self.drawOnce();
+    }
+    function up() {
+      window.removeEventListener('pointermove', mv);
+      window.removeEventListener('pointerup', up);
+      self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); self.renderPanel();
+    }
+    window.addEventListener('pointermove', mv);
+    window.addEventListener('pointerup', up);
+    e.preventDefault();
+  };
+
+  /* drag an effect segment along the timeline */
+  Editor._fxSegDrag = function (e, sg, blk, pps) {
+    var self = this;
+    if (e.button) return;
+    var sx = e.clientX, orig = sg.start, moved = false, pid = e.pointerId;
+    function mv(ev) {
+      if (ev.pointerId !== pid) return;
+      var dt = (ev.clientX - sx) / pps;
+      if (Math.abs(ev.clientX - sx) > 6) moved = true;
+      if (moved) {
+        sg.start = Math.max(0, Math.round((orig + dt) * 100) / 100);
+        self.renderTimeline();
+      }
+    }
+    function up(ev) {
+      window.removeEventListener('pointermove', mv);
+      window.removeEventListener('pointerup', up);
+      if (moved) { self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); }
+    }
+    window.addEventListener('pointermove', mv);
+    window.addEventListener('pointerup', up);
   };
 
   /* subtle "+" in preview when project is empty (not a card) */
@@ -1421,7 +1593,7 @@
       if (moved) return; // it was a swipe — leave selection & playhead alone
       if (!c.url) { self.relinkClip(c.id); return; }
       // TAP: select this clip AND move the playhead to the exact tap position
-      self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
+      self.selClipId = c.id; self.selOvId = null; self.selTxId = null; self.selFxId = null;
       self._kfSel = null;
       if (self.trimModeId && self.trimModeId !== c.id) self.trimModeId = null;
       self.setTool(null);
