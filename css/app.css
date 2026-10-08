@@ -396,8 +396,9 @@ body { touch-action: manipulation; }
 .trim-handle::after{content:'⋮';color:#fff;font-size:13px}
 /* "+" tile at lane start when empty, and at video track end */
 .tl-add{position:absolute;top:3px;bottom:3px;min-width:44px;border-radius:6px;border:1.5px dashed rgba(139,92,246,.55);background:rgba(139,92,246,.07);color:#c4b5fd;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.tl-playhead{position:absolute;top:0;bottom:0;left:50%;width:2.5px;margin-left:-1.25px;background:#fff;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.7);z-index:20;pointer-events:auto;touch-action:none;cursor:ew-resize}
+.tl-playhead{position:absolute;top:0;bottom:0;left:0;width:2.5px;margin-left:-1.25px;background:#fff;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.7);z-index:20;pointer-events:auto;touch-action:none;cursor:ew-resize}
 .tl-playhead::before{content:'';position:absolute;top:-1px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top:8px solid #fff}
+.tl-drop-ind{position:absolute;top:2px;bottom:2px;width:3px;margin-left:-1.5px;background:#a78bfa;border-radius:2px;z-index:15;pointer-events:none;display:none;box-shadow:0 0 6px rgba(167,139,250,.8)}
 /* lane blocks: waveform / text / overlay */
 .au-block,.tx-block,.ov-block{position:absolute;top:3px;bottom:3px;border-radius:6px;overflow:hidden;font-size:10px;display:flex;align-items:center;padding:0 6px;gap:5px;white-space:nowrap;cursor:pointer;border:1.5px solid transparent}
 .au-block{background:rgba(139,92,246,.20);border-color:rgba(139,92,246,.45);color:#d8ccff}
