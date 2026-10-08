@@ -66,6 +66,7 @@
   Editor.closeSheet = function () {
     document.getElementById('edSheet').style.display = 'none';
     document.getElementById('edSheetBackdrop').style.display = 'none';
+    if (window.FXTHUMBS) { try { FXTHUMBS.stopAll(); } catch (e) {} }
     if (this.tool) { this.tool = null; this.renderTools(); }
   };
 
@@ -295,6 +296,7 @@
   Editor._fxBrowser = function (el) {
     var self = this;
     if (!window.FXLIB) { el.innerHTML = '<p class="hint">Effects engine not loaded.</p>'; return; }
+    if (window.FXTHUMBS) { try { FXTHUMBS.resetBase(); } catch (e) {} }
     var wrap = document.createElement('div');
     wrap.className = 'fxb';
     wrap.innerHTML =
@@ -341,6 +343,7 @@
 
   Editor._fxRenderGrid = function (wrap) {
     var self = this, grid = wrap.querySelector('#fxbGrid');
+    if (window.FXTHUMBS) { try { FXTHUMBS.stopAll(); } catch (e) {} }
     grid.innerHTML = '';
     var q = (this._fxQuery || '').toLowerCase().trim();
     function match(name, sub) {
@@ -376,7 +379,10 @@
       var d = document.createElement('div');
       var isPrev = self._fxPreview && self._fxPreview.fxId === it.id;
       d.className = 'fxb-tile' + (isPrev ? ' sel' : '') + (it.unavailable ? ' locked' : '');
-      var th = it.none ? '' : '<img class="fxb-thumb" src="' + FXLIB.thumb(it.id) + '" alt="">';
+      var th;
+      if (it.none) th = '';
+      else if (it.unavailable || !window.FXTHUMBS) th = '<img class="fxb-thumb" src="' + FXLIB.thumb(it.id) + '" alt="">';
+      else th = '<canvas class="fxb-thumb" width="96" height="96" data-fxid="' + it.id + '"></canvas>';
       d.innerHTML = th +
         '<div class="fxb-ic">' + (it.icon || '✨') + '</div>' +
         '<div class="fxb-name">' + esc(it.name) + '</div>' +
@@ -384,6 +390,15 @@
       d.addEventListener('click', function () { self._fxTileTap(it); });
       grid.appendChild(d);
     });
+    // live animated thumbnails (CapCut-style): one shared rAF loop, viewport-culled
+    if (window.FXTHUMBS) {
+      try {
+        var cvl = grid.querySelectorAll('canvas.fxb-thumb[data-fxid]');
+        for (var ci = 0; ci < cvl.length; ci++) {
+          FXTHUMBS.play(cvl[ci], cvl[ci].getAttribute('data-fxid'));
+        }
+      } catch (e) {}
+    }
   };
 
   Editor._fxTileTap = function (it) {
