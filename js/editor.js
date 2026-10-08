@@ -196,14 +196,18 @@
         self.lastTs = performance.now();
         var loop = function (now) {
           if (!self.playing) return;
-          var dt = (now - self.lastTs) / 1000; self.lastTs = now;
-          self.t += dt;
-          var total = Store.timing().total;
-          if (self.t >= total) { self.t = total; self.pause(); self.drawOnce(); self.updateTransport(); return; }
-          self.syncClipPlayback();
-          self.positionPlayhead();
-          self.drawOnce();
-          self.updateTransport();
+          try {
+            var dt = (now - self.lastTs) / 1000; self.lastTs = now;
+            self.t += dt;
+            var total = Store.timing().total;
+            if (self.t >= total) { self.t = total; self.pause(); self.drawOnce(); self.updateTransport(); return; }
+            self.syncClipPlayback();
+            self.positionPlayhead();
+            self.drawOnce();
+            self.updateTransport();
+          } catch (err) {
+            try { console.warn('[ViraCut] frame error:', err && err.message); } catch (e) {}
+          }
           self.rafId = requestAnimationFrame(loop);
         };
         self.rafId = requestAnimationFrame(loop);
