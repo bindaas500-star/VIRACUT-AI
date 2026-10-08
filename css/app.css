@@ -443,3 +443,10 @@ body { touch-action: manipulation; }
 /* overlay panel */
 .ov-row{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--card2);font-size:12.5px}
 .ov-row .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* keyframes */
+#edKf.on{color:#c4b5fd;border-color:#8B5CF6;background:rgba(139,92,246,.18)}
+.kf-dia{position:absolute;top:50%;width:13px;height:13px;margin:-7px 0 0 -7px;background:#a78bfa;border:2px solid #fff;transform:rotate(45deg);border-radius:3px;z-index:6;cursor:pointer;touch-action:manipulation;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.kf-dia.sel{background:#fff;border-color:#a78bfa;box-shadow:0 0 8px #a78bfa}
+.kf-dia::after{content:'';position:absolute;inset:-12px}
+#edCanvas{touch-action:none}
+.tx-block,.ov-block{position:absolute;overflow:visible}
