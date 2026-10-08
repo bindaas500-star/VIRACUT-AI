@@ -106,7 +106,19 @@
       var el = document.createElement('video');
       el.src = clip.url; el.preload = 'auto'; el.playsInline = true;
       el.muted = false;
-      el.addEventListener('loadeddata', function () { self.captureStill(clip); });
+      // FIX (preview): redraw as soon as video data arrives; seek to in-point so first frame shows
+      el.addEventListener('loadeddata', function () {
+        try { el.currentTime = Math.max(0, Math.min(clip.in || 0, (el.duration || 1) - 0.1)); } catch (e) {}
+        self.captureStill(clip);
+        self.drawOnce();
+      });
+      // scrubbing: after any seek completes while paused, refresh the preview frame
+      el.addEventListener('seeked', function () {
+        if (!self.playing) self.drawOnce();
+      });
+      el.addEventListener('error', function () {
+        toast('Media error: could not decode "' + (clip.name || 'video') + '". Try MP4/H.264.', true);
+      });
       this.vidEls.set(clip.id, el);
       // route element audio through WebAudio so per-clip volume/fade/mute apply in preview
       try { if (window.AudioLab) AudioLab.Engine.routeVideo(el, false); } catch (e) {}
@@ -118,6 +130,7 @@
         if (clip.type === 'video') {
           var el = this.vidEls.get(clip.id);
           if (!el) return;
+          var prevPos = el.currentTime; // restore after capture so preview isn't disturbed
           var done = function () {
             try {
               var cv = document.createElement('canvas'); cv.width = 96; cv.height = 54;
@@ -126,6 +139,8 @@
               self.renderTimeline();
             } catch (e) {}
             el.removeEventListener('seeked', done);
+            // restore playback position so the preview shows the right frame
+            try { el.currentTime = prevPos; } catch (e2) {}
           };
           el.addEventListener('seeked', done);
           el.currentTime = Math.max(0, (clip.out || clip.duration || 1) - 0.08);
@@ -583,9 +598,10 @@
       for (var i = 0; i < steps.length; i++) if (steps[i] * pps >= 70) return steps[i];
       return 60;
     },
-    /* how many thumbnails to generate for a clip block of width w px */
-    thumbCount: function (w) {
-      return Math.max(2, Math.min(6, Math.round(w / 64)));
+    /* how many thumbnails for a clip of durSec seconds: 1 per ~2s, clamped 2..8 */
+    thumbCount: function (durSec) {
+      var n = Math.round((durSec || 3) / 2);
+      return Math.max(2, Math.min(8, n));
     },
     /* pure trim math: returns {in,out} after dragging `which` handle by dt seconds */
     trimApply: function (clip, which, dt) {
@@ -1053,7 +1069,7 @@
 
   /* thumbnail strip: N frames across the clip via offscreen video (session cache) */
   Editor.thumbStripHTML = function (c, w) {
-    var n = window.EditorLogic.thumbCount(w);
+    var n = window.EditorLogic.thumbCount(Store.clipPlayDur(c));
     var arr = this.thumbStrips.get(c.id);
     var h = '<div class="thumbs">';
     if (c.type === 'video' && arr && arr.length) {
@@ -1076,7 +1092,7 @@
       var v = document.createElement('video');
       v.muted = true; v.preload = 'auto'; v.playsInline = true;
       v.src = c.url;
-      var n = window.EditorLogic.thumbCount(w || 200);
+      var n = window.EditorLogic.thumbCount(Store.clipPlayDur(c));
       var out = [], k = 0, done = false;
       var span = Math.max(0.2, (c.out || 1) - (c.in || 0));
       function finish() {
