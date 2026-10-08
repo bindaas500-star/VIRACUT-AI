@@ -48,7 +48,7 @@
       this.sizeCanvas();
       document.getElementById('edName').textContent = p.name;
       this.syncMedia(); this.bindTimeline();
-      this.renderTools(); this.setTool(null); this.renderTimeline(); this.renderLanes(); this.renderClipStrip(); this.renderStickers(); this.updateUndoRedo();
+      this.renderTools(); this.setTool(null); this.renderTimeline(); this.renderClipStrip(); this.renderStickers(); this.updateUndoRedo();
       this.updateTransport();
       App.show('screen-editor');
       this.drawOnce();
@@ -857,71 +857,198 @@
     var vw = sc ? sc.clientWidth || 320 : 320;
     return vw / 2;
   };
+  /* ============ UNIFIED TIMELINE (Phase 3): 4 lanes, one scroll, one playhead ============ */
   Editor.renderTimeline = function () {
     var self = this;
-    var track = document.getElementById('edTimeline');
+    var vTrack = document.getElementById('edTrackVideo');
+    var aTrack = document.getElementById('edTrackAudio');
+    var tTrack = document.getElementById('edTrackText');
+    var oTrack = document.getElementById('edTrackOverlay');
     var inner = document.getElementById('edTlInner');
     var markers = document.getElementById('edMarkers');
     var p = this.project;
-    track.innerHTML = ''; markers.innerHTML = '';
+    vTrack.innerHTML = ''; aTrack.innerHTML = ''; tTrack.innerHTML = ''; oTrack.innerHTML = ''; markers.innerHTML = '';
     this._tlGeom = [];
     var pps = this.zoomPps, pad = this.tlPad();
     this._padL = pad;
     var L = window.EditorLogic;
-    if (!p || !p.clips.length) {
-      track.innerHTML = '<div class="ed2-laneempty">No clips yet — use Media to import.</div>';
-      inner.style.width = '100%';
-      self.renderLanes(); self.renderClipStrip();
-      return;
-    }
     var tm = Store.timing(), total = tm.total;
-    // time markers
-    var step = L.markerStep(pps);
-    var mhtml = '';
+    // time markers (shared ruler)
+    var step = L.markerStep(pps), mhtml = '';
     for (var mt = 0; mt <= total + 0.01; mt += step) {
       mhtml += '<span class="ed2-marker" style="left:' + Math.round(pad + mt * pps) + 'px">' + L.fmtTime(mt) + '</span>';
     }
     markers.innerHTML = mhtml;
-    markers.style.width = Math.round(pad * 2 + total * pps) + 'px';
-    // clip blocks (absolute, time-positioned)
-    p.clips.forEach(function (c, i) {
-      var it = tm.items[i]; if (!it) return;
-      var playDur = Store.clipPlayDur(c);
-      var gx = pad + it.start * pps, gw = Math.max(40, Math.round(playDur * pps));
-      self._tlGeom.push({ start: it.start, end: it.end, x: gx, w: gw });
-      var card = document.createElement('div');
-      card.className = 'clip-block' + (self.selClipId === c.id ? ' sel' : '');
-      card.style.left = Math.round(gx) + 'px';
-      card.style.width = Math.round(gw) + 'px';
-      card.setAttribute('data-id', c.id);
-      var badgeIc = c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '🎞' : c.type === 'audio' ? '🎵' : '🖼';
-      var thumbs = self.thumbStripHTML(c, gw);
-      card.innerHTML = '<span class="cbadge">' + badgeIc + '</span>' + thumbs +
-        '<div class="cmeta">' + esc(c.name) + ' · ' + playDur.toFixed(1) + 's' + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.muted ? ' · 🔇' : '') + '</div>' +
-        (!c.url ? '<div class="relink">tap to re-link</div>' : '');
-      if (self.selClipId === c.id && c.url) {
-        var hl = document.createElement('div'); hl.className = 'trim-handle l'; hl.title = 'Trim start';
-        var hr = document.createElement('div'); hr.className = 'trim-handle r'; hr.title = 'Trim end';
-        hl.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, card, 'l'); });
-        hr.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, card, 'r'); });
-        card.appendChild(hl); card.appendChild(hr);
-      }
-      card.addEventListener('pointerdown', function (e) { self.onCardDown(e, c, card, i); });
-      track.appendChild(card);
-      if (c.type === 'video' && c.url && !self.thumbStrips.get(c.id)) self.captureThumbStrip(c, gw);
-    });
-    // "+" add button at end of track
-    var add = document.createElement('div');
-    add.className = 'ed2-addclip';
-    add.style.left = Math.round(pad + total * pps + 8) + 'px';
-    add.textContent = '＋'; add.title = 'Add media';
-    add.addEventListener('click', function () { self.setTool('media'); });
-    track.appendChild(add);
-    inner.style.width = Math.round(pad * 2 + total * pps + 90) + 'px';
-    self.renderLanes();
-    self.renderClipStrip();
-    self.centerPlayhead();
+    var innerW = Math.max(Math.round(pad * 2 + total * pps + 90), 200);
+    markers.style.width = innerW + 'px';
+    inner.style.width = innerW + 'px';
+
+    /* ---- VIDEO LANE: thumbnail strips, no cards ---- */
+    if (!p || !p.clips.length) {
+      vTrack.appendChild(this._addTile(pad, function () { self.setTool('media'); }));
+    } else {
+      p.clips.forEach(function (c, i) {
+        var it = tm.items[i]; if (!it) return;
+        var playDur = Store.clipPlayDur(c);
+        var gx = pad + it.start * pps, gw = Math.max(40, Math.round(playDur * pps));
+        self._tlGeom.push({ start: it.start, end: it.end, x: gx, w: gw });
+        var blk = document.createElement('div');
+        blk.className = 'clip-block' + (self.selClipId === c.id ? ' sel' : '');
+        blk.style.left = Math.round(gx) + 'px';
+        blk.style.width = Math.round(gw) + 'px';
+        blk.setAttribute('data-id', c.id);
+        var badgeIc = c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '' : c.type === 'audio' ? '🎵' : '🖼';
+        blk.innerHTML = (badgeIc ? '<span class="cbadge">' + badgeIc + '</span>' : '') + self.thumbStripHTML(c, gw) +
+          (!c.url ? '<div class="relink">tap to re-link</div>' : '');
+        if (self.selClipId === c.id && c.url) {
+          var hl = document.createElement('div'); hl.className = 'trim-handle l'; hl.title = 'Trim start';
+          var hr = document.createElement('div'); hr.className = 'trim-handle r'; hr.title = 'Trim end';
+          hl.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, blk, 'l'); });
+          hr.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, blk, 'r'); });
+          blk.appendChild(hl); blk.appendChild(hr);
+        }
+        blk.addEventListener('pointerdown', function (e) { self.onCardDown(e, c, blk, i); });
+        vTrack.appendChild(blk);
+        if (c.type === 'video' && c.url && !self.thumbStrips.get(c.id)) self.captureThumbStrip(c, gw);
+      });
+      // "+" tile at end of video track
+      var add = document.createElement('div');
+      add.className = 'tl-add';
+      add.style.left = Math.round(pad + total * pps + 8) + 'px';
+      add.textContent = '＋'; add.title = 'Add media';
+      add.addEventListener('click', function () { self.setTool('media'); });
+      vTrack.appendChild(add);
+    }
+
+    /* ---- AUDIO LANE ---- */
+    this._renderAudioLane(aTrack, tm, total, pps, pad);
+    /* ---- TEXT LANE ---- */
+    this._renderTextLane(tTrack, pps, pad);
+    /* ---- OVERLAY LANE (single) ---- */
+    this._renderOverlayLane(oTrack, pps, pad);
+
+    this.renderClipStrip();
+    this.centerPlayhead();
+    this.renderEmptyImport();
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  };
+
+  /* small "+" tile for empty lanes */
+  Editor._addTile = function (pad, cb) {
+    var d = document.createElement('div');
+    d.className = 'tl-add';
+    d.style.left = Math.round(pad) + 'px';
+    d.textContent = '＋';
+    d.addEventListener('click', cb);
+    return d;
+  };
+
+  Editor._renderAudioLane = function (el, tm, total, pps, pad) {
+    var self = this, p = this.project, L = window.EditorLogic;
+    var hasAny = false;
+    function block(x, w, inner, sel, cb) {
+      var d = document.createElement('div');
+      d.className = 'au-block' + (sel ? ' sel' : '');
+      d.style.left = Math.round(x) + 'px'; d.style.width = Math.max(28, Math.round(w)) + 'px';
+      d.innerHTML = inner;
+      d.addEventListener('click', function (e) { e.stopPropagation(); cb(); });
+      el.appendChild(d);
+      return d;
+    }
+    if (p.music) {
+      hasAny = true;
+      var g = L.laneGeom(0, total, pps);
+      block(pad + g.x, g.w, '🎵 ' + esc(p.music.name || 'Music'), false, function () { self.setTool('audio'); });
+    }
+    tm.items.forEach(function (item) {
+      var c = item.clip;
+      if (c.type !== 'audio') return;
+      hasAny = true;
+      var g2 = L.laneGeom(item.start, item.end - item.start, pps);
+      var d = block(pad + g2.x, g2.w, '', self.selClipId === c.id, function () {
+        self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
+        self.setTool(null); self.renderTimeline(); self.drawOnce();
+      });
+      var buf = self.audioBufs.get(c.id);
+      if (buf) {
+        try {
+          var cv = document.createElement('canvas');
+          var peaks = L.wavePeaks(buf.getChannelData(0), 48);
+          cv.width = 96; cv.height = 26;
+          var ctx2 = cv.getContext('2d');
+          ctx2.fillStyle = '#a78bfa';
+          for (var i = 0; i < peaks.length; i++) {
+            var bh = Math.max(2, peaks[i] * 24);
+            ctx2.fillRect(i * 2, 13 - bh / 2, 1.4, bh);
+          }
+          d.insertBefore(cv, d.firstChild);
+        } catch (e) {}
+      }
+      var sp = document.createElement('span');
+      sp.textContent = '🎵';
+      d.appendChild(sp);
+    });
+    if (!hasAny) el.appendChild(this._addTile(pad, function () { self.setTool('audio'); }));
+    function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  };
+
+  Editor._renderTextLane = function (el, pps, pad) {
+    var self = this, p = this.project, L = window.EditorLogic;
+    if (!p.texts.length) {
+      el.appendChild(this._addTile(pad, function () { self.textDialog(); }));
+      return;
+    }
+    p.texts.forEach(function (tx) {
+      var g = L.laneGeom(tx.start, Math.max(0.5, tx.end - tx.start), pps);
+      var d = document.createElement('div');
+      d.className = 'tx-block' + (self.selTxId === tx.id ? ' sel' : '');
+      d.style.left = Math.round(pad + g.x) + 'px';
+      d.style.width = Math.max(28, Math.round(g.w)) + 'px';
+      d.textContent = 'T ' + String(tx.text || '').slice(0, 14);
+      d.addEventListener('click', function (e) {
+        e.stopPropagation();
+        self.selTxId = tx.id; self.selClipId = null; self.selOvId = null;
+        self.renderTimeline(); self.textDialog(tx);
+      });
+      el.appendChild(d);
+    });
+  };
+
+  Editor._renderOverlayLane = function (el, pps, pad) {
+    var self = this, p = this.project, L = window.EditorLogic;
+    if (!p.overlays.length) {
+      el.appendChild(this._addTile(pad, function () { self.setTool('overlay'); }));
+      return;
+    }
+    p.overlays.forEach(function (ov) {
+      var g = L.laneGeom(ov.start, ov.dur, pps);
+      var d = document.createElement('div');
+      d.className = 'ov-block' + (self.selOvId === ov.id ? ' sel' : '');
+      d.style.left = Math.round(pad + g.x) + 'px';
+      d.style.width = Math.max(28, Math.round(g.w)) + 'px';
+      d.textContent = (ov.type === 'video' ? '🎞' : '🖼');
+      d.title = String(ov.name || 'overlay');
+      d.addEventListener('click', function (e) {
+        e.stopPropagation();
+        self.selOvId = ov.id; self.selClipId = null; self.selTxId = null;
+        self.renderTimeline(); self.setTool('overlay');
+      });
+      el.appendChild(d);
+    });
+  };
+
+  /* subtle "+" in preview when project is empty (not a card) */
+  Editor.renderEmptyImport = function () {
+    var wrap = document.getElementById('edPreviewWrap');
+    var old = document.getElementById('edEmptyImport');
+    if (old) old.remove();
+    if (this.project && this.project.clips.length) return;
+    var d = document.createElement('div');
+    d.className = 'ed-empty-import'; d.id = 'edEmptyImport';
+    d.innerHTML = '<button id="edEmptyBtn" title="Import media">＋</button>';
+    wrap.appendChild(d);
+    var self = this;
+    d.querySelector('#edEmptyBtn').onclick = function () { self.setTool('media'); };
   };
 
   /* thumbnail strip: N frames across the clip via offscreen video (session cache) */
@@ -1145,10 +1272,10 @@
         }
       }
     }, { passive: true });
-    // lane buttons
-    document.getElementById('edAddAudio').onclick = function () { self.setTool('audio'); };
-    document.getElementById('edAddText').onclick = function () { self.textDialog(); };
-    document.getElementById('edAddOvLane').onclick = function () { self.addOverlayLane(); };
+    // sheet close wiring
+    document.getElementById('edSheetX').onclick = function () { self.closeSheet(); };
+    document.getElementById('edSheetBackdrop').onclick = function () { self.closeSheet(); };
+    document.getElementById('edSheetGrip').onclick = function () { self.closeSheet(); };
   };
 
   Editor.selClip = function () { return this.selClipId ? this.findClip(this.selClipId) : null; };
@@ -1290,11 +1417,21 @@
 
   Editor.renderPanel = function () {
     var el = document.getElementById('edPanel');
+    var sheet = document.getElementById('edSheet');
+    var backdrop = document.getElementById('edSheetBackdrop');
     var fn = this['panel_' + this.tool];
     el.innerHTML = '';
-    if (!fn) { el.innerHTML = '<p class="hint">Pick a tool above, or import media to begin.</p>'; return; }
+    if (!fn) { this.closeSheet(); return; }
     fn.call(this, el);
+    sheet.style.display = 'flex';
+    backdrop.style.display = 'block';
     this.updateUndoRedo();
+  };
+
+  Editor.closeSheet = function () {
+    document.getElementById('edSheet').style.display = 'none';
+    document.getElementById('edSheetBackdrop').style.display = 'none';
+    if (this.tool) { this.tool = null; this.renderTools(); }
   };
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
@@ -1756,137 +1893,7 @@
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
-  /* ================= LANES ================= */
-  Editor.renderLanes = function () {
-    this.renderAudioLane(); this.renderTextLane(); this.renderOverlayLanes();
-  };
-
-  Editor.renderAudioLane = function () {
-    var self = this, el = document.getElementById('edTrackAudio');
-    var p = this.project; el.innerHTML = '';
-    var pps = this.zoomPps, pad = this._padL || 0;
-    var tm = Store.timing(), total = tm.total;
-    function block(x, w, inner, sel, cb) {
-      var d = document.createElement('div');
-      d.className = 'au-block' + (sel ? ' sel' : '');
-      d.style.left = Math.round(x) + 'px'; d.style.width = Math.max(28, Math.round(w)) + 'px';
-      d.innerHTML = inner;
-      d.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-      d.addEventListener('click', cb);
-      el.appendChild(d);
-      return d;
-    }
-    if (p.music) {
-      var g = L.laneGeom(0, total, pps);
-      block(pad + g.x, g.w, '🎵 ' + esc(p.music.name || 'Music'), false, function () {
-        self.setTool('audio');
-      });
-    }
-    tm.items.forEach(function (item) {
-      var c = item.clip;
-      if (c.type !== 'audio') return;
-      var g = L.laneGeom(item.start, item.end - item.start, pps);
-      var d = block(pad + g.x, g.w, '', self.selClipId === c.id, function () {
-        self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
-        self.setTool(null); self.renderTimeline(); self.drawOnce();
-      });
-      // waveform from decoded buffer, else solid icon
-      var buf = self.audioBufs.get(c.id);
-      if (buf) {
-        try {
-          var cv = document.createElement('canvas');
-          var peaks = L.wavePeaks(buf.getChannelData(0), 48);
-          cv.width = 96; cv.height = 28;
-          var ctx2 = cv.getContext('2d');
-          ctx2.fillStyle = '#a78bfa';
-          for (var i = 0; i < peaks.length; i++) {
-            var bh = Math.max(2, peaks[i] * 26);
-            ctx2.fillRect(i * 2, 14 - bh / 2, 1.4, bh);
-          }
-          d.insertBefore(cv, d.firstChild);
-        } catch (e) {}
-      }
-      var sp = document.createElement('span');
-      sp.textContent = '🎵 ' + (c.name || 'audio');
-      d.appendChild(sp);
-    });
-    if (!p.music && !tm.items.some(function (it) { return it.clip.type === 'audio'; })) {
-      el.innerHTML = '<div class="ed2-laneempty">No audio — tap + Add audio.</div>';
-    }
-  };
-
-  Editor.renderTextLane = function () {
-    var self = this, el = document.getElementById('edTrackText');
-    var p = this.project; el.innerHTML = '';
-    var pps = this.zoomPps, pad = this._padL || 0;
-    if (!p.texts.length) {
-      el.innerHTML = '<div class="ed2-laneempty">No text — tap + Add text.</div>';
-      return;
-    }
-    p.texts.forEach(function (tx) {
-      var g = L.laneGeom(tx.start, Math.max(0.5, tx.end - tx.start), pps);
-      var d = document.createElement('div');
-      d.className = 'tx-block' + (self.selTxId === tx.id ? ' sel' : '');
-      d.style.left = Math.round(pad + g.x) + 'px';
-      d.style.width = Math.max(28, Math.round(g.w)) + 'px';
-      d.textContent = 'T ' + String(tx.text || '').slice(0, 18);
-      d.addEventListener('click', function () {
-        self.selTxId = tx.id; self.selClipId = null; self.selOvId = null;
-        self.renderTimeline(); self.textDialog(tx);
-      });
-      el.appendChild(d);
-    });
-  };
-
-  Editor.renderOverlayLanes = function () {
-    var self = this, wrap = document.getElementById('edOverlayLanes');
-    var p = this.project; wrap.innerHTML = '';
-    var pps = this.zoomPps, pad = this._padL || 0;
-    for (var li = 0; li < p.ovLaneCount; li++) {
-      (function (lane) {
-        var lh = document.createElement('div');
-        lh.className = 'ed2-lanehead';
-        lh.innerHTML = '<span>🖼️ Overlay ' + (lane + 1) + '</span>';
-        var ab = document.createElement('button');
-        ab.className = 'btn ghost xs'; ab.textContent = '+ Add overlay';
-        ab.onclick = function () { self.addOverlay(lane); };
-        lh.appendChild(ab);
-        wrap.appendChild(lh);
-        var tr = document.createElement('div');
-        tr.className = 'ed2-lanetrack';
-        var has = false;
-        p.overlays.forEach(function (ov) {
-          if (ov.lane !== lane) return;
-          has = true;
-          var g = L.laneGeom(ov.start, ov.dur, pps);
-          var d = document.createElement('div');
-          d.className = 'ov-block' + (self.selOvId === ov.id ? ' sel' : '');
-          d.style.left = Math.round(pad + g.x) + 'px';
-          d.style.width = Math.max(28, Math.round(g.w)) + 'px';
-          d.textContent = (ov.type === 'video' ? '🎞 ' : '🖼 ') + String(ov.name || '').slice(0, 16);
-          d.addEventListener('click', function () {
-            self.selOvId = ov.id; self.selClipId = null; self.selTxId = null;
-            self.renderTimeline(); self.setTool('overlay');
-          });
-          tr.appendChild(d);
-        });
-        if (!has) {
-          var em = document.createElement('div');
-          em.className = 'ed2-laneempty'; em.textContent = 'Empty';
-          tr.appendChild(em);
-        }
-        wrap.appendChild(tr);
-      })(li);
-    }
-  };
-
-  Editor.addOverlayLane = function () {
-    var p = this.project;
-    if (p.ovLaneCount >= 3) { toast('Maximum 3 overlay tracks.', true); return; }
-    p.ovLaneCount++;
-    this.snapshot(); Store.persist(); this.renderOverlayLanes();
-    toast('Overlay track ' + p.ovLaneCount + ' added.');
-  };
+  Editor.addOverlayLane = function () { this.setTool('overlay'); };
 
   Editor.addOverlay = function (lane) {
     var self = this;
@@ -2127,7 +2134,7 @@
     var self = this, p = this.project;
     var d = document.createElement('div');
     d.innerHTML = '<h4>🖼️ Overlays</h4>';
-    if (!p.overlays.length) d.innerHTML += '<p class="muted">No overlays yet — use + Add overlay on a track.</p>';
+    if (!p.overlays.length) d.innerHTML += '<p class="muted">No overlays yet.</p>';
     p.overlays.forEach(function (ov) {
       var row = document.createElement('div');
       row.className = 'ov-row' + (self.selOvId === ov.id ? ' sel' : '');
