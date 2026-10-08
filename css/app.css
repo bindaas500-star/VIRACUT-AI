@@ -411,7 +411,8 @@ body { touch-action: manipulation; }
 .cs-btn .ic{font-size:18px}
 .cs-btn.soon{opacity:.45}
 /* bottom toolbar */
-.tl-toolbar{display:flex;gap:2px;overflow-x:auto;padding:8px 4px 10px;border-top:1px solid var(--line);background:rgba(10,10,20,.97);position:sticky;bottom:0;z-index:30}
+.tl-toolbar{display:flex;gap:2px;overflow-x:auto;padding:8px 16px 10px 4px;border-top:1px solid var(--line);background:rgba(10,10,20,.97);position:sticky;bottom:0;z-index:30;scrollbar-width:none}
+.tl-toolbar::-webkit-scrollbar{display:none}
 .tb-btn{flex:0 0 auto;width:58px;min-height:56px;border:none;background:transparent;color:#C9CEDD;font-size:10.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:10px;cursor:pointer}
 .tb-btn .ic{font-size:20px}
 .tb-btn.on{background:rgba(139,92,246,.18);color:#fff}
