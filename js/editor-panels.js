@@ -281,27 +281,314 @@
     el.querySelector('#trX').onclick = function () { set('crossfade'); };
   };
 
-  /* ---------- FX (Smart Effects) ---------- */
+  /* ---------- FX BROWSER (Phase 8: effects browser + timeline segments) ---------- */
+  Editor._fxCat = 'video'; Editor._fxSub = 'trending'; Editor._fxQuery = '';
+
   Editor.panel_fx = function (el) {
-    var self = this, c = this.selClip();
-    if (!c) { el.innerHTML = '<p class="hint">Select a clip in the timeline first.</p>'; return; }
-    el.appendChild(h('<h4>✨ Smart FX — ' + esc(c.name) + '</h4>'));
-    var grid = document.createElement('div');
-    grid.className = 'fx-grid';
-    FX.list().forEach(function (f) {
-      var b = document.createElement('button');
-      b.className = 'fx-btn' + ((c.fx || 'none') === f.id ? ' on' : '') + (f.pro ? ' pro' : '');
-      b.innerHTML = '<span class="fx-ic">' + f.icon + '</span><span>' + f.name + '</span>' +
-        (f.pro ? '<span class="fx-lock">🔒</span>' : '');
-      b.onclick = function () {
-        if (f.pro) { toast(window.t ? t('fx.pro_locked') : '🔒 Pro effect — coming soon in ViraCut Pro'); return; }
-        c.fx = f.id === 'none' ? undefined : f.id;
-        self.snapshot(); Store.persist(); self.drawOnce(); self.renderTimeline(); self.renderPanel();
-      };
-      grid.appendChild(b);
+    var self = this;
+    // if an effect segment is selected, show its adjustment panel instead
+    var selSg = this.selFxId ? (this.project.effects || []).filter(function (s) { return s.id === self.selFxId; })[0] : null;
+    if (selSg) { this.panel_fx_adjust(el, selSg); return; }
+    this._fxBrowser(el);
+  };
+
+  Editor._fxBrowser = function (el) {
+    var self = this;
+    if (!window.FXLIB) { el.innerHTML = '<p class="hint">Effects engine not loaded.</p>'; return; }
+    var wrap = document.createElement('div');
+    wrap.className = 'fxb';
+    wrap.innerHTML =
+      '<div class="fxb-top"><button class="icon-btn" id="fxbBack" title="Back">‹</button>' +
+      '<input id="fxbSearch" class="fxb-search" placeholder="🔍 Search effects…" value="' + esc(self._fxQuery) + '">' +
+      (self._fxPreview ? '<button class="btn danger sm" id="fxbCancel">Cancel</button>' : '') + '</div>' +
+      '<div class="fxb-cats" id="fxbCats"></div>' +
+      '<div class="fxb-subs" id="fxbSubs"></div>' +
+      '<div class="fxb-grid" id="fxbGrid"></div>' +
+      '<div class="fxb-preview" id="fxbPrev" style="display:none"></div>';
+    el.appendChild(wrap);
+    wrap.querySelector('#fxbBack').onclick = function () { self._fxPreview = null; self.drawOnce(); self.closeSheet(); };
+    var si = wrap.querySelector('#fxbSearch');
+    si.addEventListener('input', function () {
+      self._fxQuery = si.value;
+      self._fxRenderGrid(wrap);
     });
-    el.appendChild(grid);
-    el.insertAdjacentHTML('beforeend', '<p class="muted" style="margin-top:8px">Original ViraCut effects — baked into export.</p>');
+    var cx = wrap.querySelector('#fxbCancel');
+    if (cx) cx.onclick = function () { self._fxPreview = null; self._fxPhotoPreview = null; self.drawOnce(); self.renderPanel(); };
+    // category tabs
+    var cats = [['video', '🎬 Video'], ['body', '🧍 Body'], ['photo', '🖼 Photo'], ['ai', '🤖 AI']];
+    var catEl = wrap.querySelector('#fxbCats');
+    cats.forEach(function (c) {
+      var b = document.createElement('button');
+      b.className = 'fxb-cat' + (self._fxCat === c[0] ? ' on' : '');
+      b.textContent = c[1];
+      b.onclick = function () { self._fxCat = c[0]; self._fxQuery = ''; self.renderPanel(); };
+      catEl.appendChild(b);
+    });
+    // subcategory tabs (video only)
+    var subEl = wrap.querySelector('#fxbSubs');
+    if (self._fxCat === 'video') {
+      FXLIB.subcats.forEach(function (s) {
+        var b = document.createElement('button');
+        b.className = 'fxb-sub' + (self._fxSub === s.id ? ' on' : '');
+        b.textContent = s.name;
+        b.onclick = function () { self._fxSub = s.id; self.renderPanel(); };
+        subEl.appendChild(b);
+      });
+    }
+    this._fxRenderGrid(wrap);
+    this._fxRenderPreviewBar(wrap);
+  };
+
+  Editor._fxRenderGrid = function (wrap) {
+    var self = this, grid = wrap.querySelector('#fxbGrid');
+    grid.innerHTML = '';
+    var q = (this._fxQuery || '').toLowerCase().trim();
+    function match(name, sub) {
+      if (!q) return true;
+      return name.toLowerCase().indexOf(q) >= 0 || (sub || '').toLowerCase().indexOf(q) >= 0;
+    }
+    var items = [], i, def;
+    if (this._fxCat === 'video') {
+      // "None" tile first
+      items.push({ id: '__none', name: 'None', icon: '🚫', none: true });
+      for (i = 0; i < FXLIB.video.length; i++) {
+        def = FXLIB.video[i];
+        if (this._fxSub && def.sub !== this._fxSub && q === '') continue;
+        if (!match(def.name, def.sub)) continue;
+        items.push(def);
+      }
+    } else if (this._fxCat === 'photo') {
+      for (i = 0; i < FXLIB.photo.length; i++) {
+        def = FXLIB.photo[i];
+        if (!match(def.name, '')) continue;
+        items.push(def);
+      }
+    } else if (this._fxCat === 'body') {
+      for (i = 0; i < FXLIB.body.length; i++) { if (match(FXLIB.body[i].name, '')) items.push(FXLIB.body[i]); }
+    } else {
+      for (i = 0; i < FXLIB.ai.length; i++) { if (match(FXLIB.ai[i].name, '')) items.push(FXLIB.ai[i]); }
+    }
+    if (!items.length) {
+      grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:18px">No effects match “' + esc(this._fxQuery) + '”. Try “blur”, “glitch” or “glow”.</p>';
+      return;
+    }
+    items.forEach(function (it) {
+      var d = document.createElement('div');
+      var isPrev = self._fxPreview && self._fxPreview.fxId === it.id;
+      d.className = 'fxb-tile' + (isPrev ? ' sel' : '') + (it.unavailable ? ' locked' : '');
+      var th = it.none ? '' : '<img class="fxb-thumb" src="' + FXLIB.thumb(it.id) + '" alt="">';
+      d.innerHTML = th +
+        '<div class="fxb-ic">' + (it.icon || '✨') + '</div>' +
+        '<div class="fxb-name">' + esc(it.name) + '</div>' +
+        (it.badge ? '<div class="fxb-badge">' + esc(it.badge) + '</div>' : '');
+      d.addEventListener('click', function () { self._fxTileTap(it); });
+      grid.appendChild(d);
+    });
+  };
+
+  Editor._fxTileTap = function (it) {
+    var self = this;
+    if (it.none) {
+      this._fxPreview = null; this._fxPhotoPreview = null;
+      this.drawOnce(); this.renderPanel();
+      toast('Preview cleared.');
+      return;
+    }
+    if (it.unavailable === 'model') {
+      toast('🧍 Body tracking needs a downloadable AI segmentation model — coming in Phase 2.', true);
+      return;
+    }
+    if (it.unavailable === 'api') {
+      toast('🤖 This AI effect needs a cloud API integration — coming in Phase 2.', true);
+      return;
+    }
+    if (this._fxCat === 'photo') { this._fxPhotoTap(it); return; }
+    // video effect → live preview
+    this._fxPreview = { fxId: it.id, params: FXLIB.defaultParams(it) };
+    this.drawOnce();
+    this.renderPanel();
+  };
+
+  /* photo effect tap: needs a selected photo clip or photo overlay */
+  Editor._fxPhotoTap = function (it) {
+    var target = null, tid = null;
+    var c = this.selClip();
+    if (c && c.type === 'photo') { target = 'clip'; tid = c.id; }
+    else if (this.selOvId) {
+      var ov = (this.project.overlays || []).filter(function (o) { return o.id === this.selOvId; }, this)[0];
+      if (ov && ov.type === 'photo') { target = 'overlay'; tid = ov.id; }
+    }
+    if (!target) {
+      toast('Select a photo clip or photo overlay first, then pick an effect.', true);
+      return;
+    }
+    this._fxPhotoPreview = { target: target, id: tid, fxId: it.id, params: FXLIB.defaultParams(it) };
+    this.drawOnce();
+    this.renderPanel();
+  };
+
+  /* preview bar with sliders + Apply */
+  Editor._fxRenderPreviewBar = function (wrap) {
+    var self = this, bar = wrap.querySelector('#fxbPrev');
+    var pv = this._fxPreview, pp = this._fxPhotoPreview;
+    if (!pv && !pp) return;
+    var def, params, title, onApply;
+    if (pv) {
+      def = FXLIB.get(pv.fxId); if (!def) return;
+      params = pv.params; title = def.name;
+      onApply = function () { self._fxApplyPreview(); };
+    } else {
+      def = FXLIB.get(pp.fxId); if (!def) return;
+      params = pp.params; title = def.name + ' (photo)';
+      onApply = function () { self._fxApplyPhoto(); };
+    }
+    bar.style.display = 'block';
+    bar.innerHTML = '<div class="fxb-pvtitle">👁 ' + esc(title) + ' <span class="muted">— previewing</span></div><div class="fxb-sliders"></div>' +
+      '<div class="row" style="margin-top:8px"><button class="btn primary sm" id="fxbApply">✓ Apply</button>' +
+      '<button class="btn ghost sm" id="fxbReset">Reset</button></div>';
+    var sl = bar.querySelector('.fxb-sliders');
+    (def.params || []).forEach(function (prm) {
+      var row = document.createElement('div');
+      row.className = 'adj-row';
+      row.innerHTML = '<div class="lbl"><span>' + esc(prm.label) + '</span><span class="val">' + params[prm.key] + '</span></div>';
+      var inp = document.createElement('input');
+      inp.type = 'range'; inp.min = prm.min; inp.max = prm.max; inp.step = prm.step || 1;
+      inp.value = params[prm.key];
+      inp.addEventListener('input', function () {
+        params[prm.key] = +inp.value;
+        row.querySelector('.val').textContent = inp.value;
+        self.drawOnce();
+      });
+      inp.addEventListener('change', function () { self.drawOnce(); });
+      row.appendChild(inp);
+      sl.appendChild(row);
+    });
+    if (!(def.params || []).length) sl.innerHTML = '<p class="muted">No adjustable parameters.</p>';
+    bar.querySelector('#fxbApply').onclick = onApply;
+    bar.querySelector('#fxbReset').onclick = function () {
+      var dp = FXLIB.defaultParams(def);
+      for (var k in dp) params[k] = dp[k];
+      self.drawOnce(); self.renderPanel();
+    };
+  };
+
+  /* commit previewed video effect as a timeline segment */
+  Editor._fxApplyPreview = function () {
+    var pv = this._fxPreview;
+    if (!pv) return;
+    var def = FXLIB.get(pv.fxId);
+    if (!def) return;
+    var total = Store.timing().total;
+    var sg = {
+      id: Store.uid('fx'),
+      fxId: pv.fxId,
+      name: def.name,
+      start: Math.max(0, Math.min(total - 0.5, this.t)),
+      dur: 3,
+      params: JSON.parse(JSON.stringify(pv.params))
+    };
+    if (sg.start + sg.dur > total) sg.dur = Math.max(0.5, total - sg.start);
+    this.project.effects = this.project.effects || [];
+    this.project.effects.push(sg);
+    this.project.effects.sort(function (a, b) { return a.start - b.start; });
+    this._fxPreview = null;
+    this.selFxId = sg.id;
+    this.snapshot(); Store.persist();
+    this.renderTimeline(); this.drawOnce(); this.renderPanel();
+    toast('✨ ' + def.name + ' added to timeline.');
+  };
+
+  /* commit previewed photo effect onto the photo clip / overlay */
+  Editor._fxApplyPhoto = function () {
+    var pp = this._fxPhotoPreview;
+    if (!pp) return;
+    var def = FXLIB.get(pp.fxId);
+    if (!def) return;
+    if (pp.target === 'clip') {
+      var c = this.selClip();
+      if (c && c.id === pp.id) {
+        c.photoFx = pp.fxId;
+        c.photoFxParams = JSON.parse(JSON.stringify(pp.params));
+      }
+    } else {
+      var ov = (this.project.overlays || []).filter(function (o) { return o.id === pp.id; })[0];
+      if (ov) {
+        ov.photoFx = pp.fxId;
+        ov.photoFxParams = JSON.parse(JSON.stringify(pp.params));
+      }
+    }
+    this._fxPhotoPreview = null;
+    this.snapshot(); Store.persist();
+    this.renderTimeline(); this.drawOnce(); this.renderPanel();
+    toast('🖼 ' + def.name + ' applied.');
+  };
+
+  /* adjustment panel for a selected effect segment */
+  Editor.panel_fx_adjust = function (el, sg) {
+    var self = this;
+    if (!sg && this.selFxId) {
+      sg = (this.project.effects || []).filter(function (s) { return s.id === self.selFxId; })[0];
+    }
+    if (!sg) { el.innerHTML = '<p class="hint">Select an effect segment first.</p>'; return; }
+    var def = window.FXLIB ? FXLIB.get(sg.fxId) : null;
+    el.appendChild(h('<h4>✨ ' + esc(sg.name || (def ? def.name : 'Effect')) + '</h4>' +
+      '<p class="muted">' + sg.start.toFixed(1) + 's – ' + (sg.start + sg.dur).toFixed(1) + 's · ' + sg.dur.toFixed(1) + 's long</p>'));
+    var sl = document.createElement('div');
+    (def && def.params ? def.params : []).forEach(function (prm) {
+      var row = document.createElement('div');
+      row.className = 'adj-row';
+      var cur = sg.params ? sg.params[prm.key] : prm.def;
+      row.innerHTML = '<div class="lbl"><span>' + esc(prm.label) + '</span><span class="val">' + cur + '</span></div>';
+      var inp = document.createElement('input');
+      inp.type = 'range'; inp.min = prm.min; inp.max = prm.max; inp.step = prm.step || 1;
+      inp.value = cur;
+      inp.addEventListener('input', function () {
+        sg.params = sg.params || {}; sg.params[prm.key] = +inp.value;
+        row.querySelector('.val').textContent = inp.value;
+        self.drawOnce();
+      });
+      inp.addEventListener('change', function () { self.snapshot(); Store.persist(); self.drawOnce(); });
+      row.appendChild(inp);
+      sl.appendChild(row);
+    });
+    // duration slider
+    var total = Store.timing().total;
+    var dr = document.createElement('div');
+    dr.className = 'adj-row';
+    dr.innerHTML = '<div class="lbl"><span>Duration</span><span class="val">' + sg.dur.toFixed(1) + 's</span></div>';
+    var di = document.createElement('input');
+    di.type = 'range'; di.min = 0.5; di.max = Math.max(1, total - sg.start); di.step = 0.1; di.value = sg.dur;
+    di.addEventListener('input', function () {
+      sg.dur = +di.value;
+      dr.querySelector('.val').textContent = sg.dur.toFixed(1) + 's';
+      self.renderTimeline();
+    });
+    di.addEventListener('change', function () { self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); });
+    dr.appendChild(di);
+    sl.appendChild(dr);
+    el.appendChild(sl);
+    var row2 = h('<div class="row" style="margin-top:10px">' +
+      '<button class="btn ghost sm" id="fxMore">＋ Effects</button>' +
+      '<button class="btn ghost sm" id="fxDup">⧉ Duplicate</button>' +
+      '<button class="btn danger sm" id="fxDel">🗑 Delete</button></div>');
+    el.appendChild(row2);
+    row2.querySelector('#fxMore').onclick = function () {
+      self.selFxId = null; self.renderTimeline(); self.renderPanel();
+    };
+    row2.querySelector('#fxDup').onclick = function () {
+      var cp = JSON.parse(JSON.stringify(sg));
+      cp.id = Store.uid('fx'); cp.start = Math.min(total - 0.5, sg.start + sg.dur);
+      self.project.effects.push(cp);
+      self.project.effects.sort(function (a, b) { return a.start - b.start; });
+      self.selFxId = cp.id;
+      self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); self.renderPanel();
+    };
+    row2.querySelector('#fxDel').onclick = function () {
+      self.project.effects = self.project.effects.filter(function (s) { return s.id !== sg.id; });
+      self.selFxId = null;
+      self.snapshot(); Store.persist(); self.renderTimeline(); self.drawOnce(); self.closeSheet();
+      toast('Effect removed.');
+    };
   };
 
   /* ---------- TEXT ---------- */
