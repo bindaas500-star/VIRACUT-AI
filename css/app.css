@@ -329,6 +329,7 @@ body { touch-action: manipulation; }
 .ed-timeline{position:relative}
 #edPlayhead{position:absolute;top:0;bottom:0;left:50%;width:3px;margin-left:-1.5px;background:#fff;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.7);z-index:20;touch-action:none;cursor:ew-resize}
 #edPlayhead::before{content:'';position:absolute;top:-2px;left:50%;transform:translateX(-50%);border:7px solid transparent;border-top:9px solid #fff}
+#edPlayhead::after{content:'';position:absolute;top:0;bottom:0;left:-11px;width:24px}
 #edDropLine{position:absolute;top:0;bottom:0;width:3px;background:#22c55e;border-radius:2px;z-index:7;pointer-events:none;display:none}
 .clip-card.dragging{opacity:.9;border-color:#8B5CF6;box-shadow:0 10px 26px rgba(0,0,0,.55)}
 .tl-zoom{display:inline-flex;gap:6px;align-items:center;margin-left:auto;margin-right:8px}
@@ -386,7 +387,7 @@ body { touch-action: manipulation; }
 .tl-lane[data-lane=overlay] .tl-track{min-height:48px}
 /* video clip = thumbnail strip, no card */
 .clip-block{position:absolute;top:3px;bottom:3px;border-radius:6px;overflow:hidden;background:#16162a;border:1.5px solid transparent;cursor:pointer;touch-action:pan-x}
-.clip-block.sel{border-color:var(--violet);box-shadow:0 0 0 1.5px rgba(139,92,246,.5)}
+.clip-block.sel{border-color:#a78bfa;box-shadow:0 0 0 1.5px #fff,0 0 14px rgba(139,92,246,.7)}
 .clip-block .thumbs{display:flex;height:100%;overflow:hidden}
 .clip-block .thumbs img{height:100%;flex:1 0 auto;object-fit:cover;min-width:0}
 .clip-block .cbadge{position:absolute;top:2px;left:3px;font-size:9px;background:rgba(0,0,0,.55);border-radius:5px;padding:0 4px;pointer-events:none}
