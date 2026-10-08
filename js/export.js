@@ -14,10 +14,15 @@
   }
 
   var Exporter = {
-    exporting: false,
+    exporting: false, _cancel: false,
 
-    export: function (onProgress) {
+    cancelExport: function () { this._cancel = true; },
+
+    export: function (opts, onProgress) {
       var self = this;
+      // backward compat: export(onProgress)
+      if (typeof opts === 'function') { onProgress = opts; opts = {}; }
+      opts = opts || {};
       return new Promise(function (resolve, reject) {
         if (self.exporting) return reject(new Error('Export already running.'));
         var p = Editor.project;
@@ -26,10 +31,16 @@
         if (!tm.items.length || tm.total < 0.3) return reject(new Error('Add clips first — nothing to export.'));
         if (typeof MediaRecorder === 'undefined') return reject(new Error('MediaRecorder not supported on this device.'));
 
-        self.exporting = true;
+        // make sure extracted-audio buffers are decoded before we start
+        Editor.ensureAudioBuffers().then(runExport).catch(function (e) { reject(e); });
+
+        function runExport() {
+        self.exporting = true; self._cancel = false;
         Editor.pause();
 
-        var size = Plans.exportSize(p.aspect);
+        var size = opts.size || Plans.exportSize(p.aspect);
+        var fps = opts.fps || 30;
+        var vbps = opts.videoBps || 6000000;
         var cv = document.createElement('canvas');
         cv.width = size.w; cv.height = size.h;
         var g = cv.getContext('2d');
@@ -39,17 +50,28 @@
         eng.setMonitorLevel(0); // silent while rendering
         Editor.vidEls.forEach(function (el) { eng.routeVideo(el, true); });
 
-        // voices → export stream
+        // voices → export stream (music + takes + extracted audio clips)
         var voices = [];
         if (p.music && p.music.buffer) voices.push({ buffer: p.music.buffer, volume: p.music.volume, loop: true, offset: 0 });
         p.voiceovers.forEach(function (v) { if (v.buffer) voices.push({ buffer: v.buffer, volume: v.volume, loop: false, offset: 0 }); });
-        if (voices.length) eng.start(voices, true);
+        tm.items.forEach(function (item) {
+          var c = item.clip;
+          if (c.type !== 'audio') return;
+          var buf = Editor.audioBufs.get(c.id);
+          if (!buf) return;
+          voices.push({
+            buffer: buf, volume: (c.volume == null ? 1 : c.volume), loop: false,
+            offset: c.in || 0, at: item.start, dur: window.EditorLogic ? EditorLogic.playDur(c) : 0,
+            fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0
+          });
+        });
+        if (voices.length) eng.start(voices, true, 0);
 
-        var stream = cv.captureStream(30);
+        var stream = cv.captureStream(fps);
         dest.stream.getAudioTracks().forEach(function (tr) { stream.addTrack(tr); });
         var mime = pickMime();
         var rec;
-        try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6000000 } : undefined); }
+        try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: vbps } : undefined); }
         catch (e) { cleanup(); return reject(new Error('Could not start recorder: ' + e.message)); }
 
         var chunks = [];
@@ -73,6 +95,18 @@
               } else if (!el.paused) el.pause();
             } catch (e) {}
           });
+          // per-clip volume / fade / mute baked into export via the gain node
+          Editor.vidEls.forEach(function (el, id) {
+            try {
+              var mon = el._audMon;
+              if (!mon) return;
+              var target = 0;
+              if (found && found.item.clip.id === id && window.EditorLogic) {
+                target = EditorLogic.fadeGain(found.item.clip, t - found.item.start);
+              }
+              if (Math.abs(mon.gain.value - target) > 0.02) mon.gain.value = target;
+            } catch (e) {}
+          });
         }
         function watermark() {
           if (!Plans.watermark()) return;
@@ -86,28 +120,33 @@
         }
         function frame(now) {
           if (finished) return;
+          if (self._cancel) { finish(true); return; }
           var dt = (now - last) / 1000; last = now;
           t += dt;
-          if (t >= total) { t = total; finish(); return; }
+          if (t >= total) { t = total; finish(false); return; }
           driveVideos();
           Editor.composite(g, size.w, size.h, t, true);
           watermark();
           if (onProgress) { try { onProgress(t / total); } catch (e) {} }
           requestAnimationFrame(frame);
         }
-        function finish() {
+        function finish(cancelled) {
           finished = true;
-          driveVideos();
-          Editor.composite(g, size.w, size.h, total - 0.03, true);
-          watermark();
+          if (!cancelled) {
+            driveVideos();
+            Editor.composite(g, size.w, size.h, total - 0.03, true);
+            watermark();
+          }
           if (onProgress) { try { onProgress(1); } catch (e) {} }
           setTimeout(function () {
             try { rec.stop(); } catch (e) {}
             stopped.then(function () {
               var blob = new Blob(chunks, { type: rec.mimeType || 'video/webm' });
               var url = URL.createObjectURL(blob);
+              var wasCancel = self._cancel;
               cleanup();
-              resolve({ url: url, blob: blob, size: size });
+              if (wasCancel) reject(new Error('Export cancelled.'));
+              else resolve({ url: url, blob: blob, size: size, fps: fps, vbps: vbps });
             });
           }, 400);
         }
@@ -124,6 +163,7 @@
         Editor.composite(g, size.w, size.h, 0, true);
         watermark();
         requestAnimationFrame(function (now) { last = now; requestAnimationFrame(frame); });
+        } // end runExport
       });
     },
 

@@ -24,6 +24,9 @@
     audioKept: null, // offsets for resume
     placingSticker: null, selStickerId: null,
     _seeking: false,
+    // Phase 1 additions
+    zoomPps: 30, _tlWidths: [], _tlX: [], _tlBound: false,
+    staged: [], audioBufs: new Map(), // clipId -> AudioBuffer (session only)
 
     /* ================= open / teardown ================= */
     open: function (id) {
@@ -33,12 +36,15 @@
       this.vidEls = new Map(); this.imgEls = new Map(); this.stills = new Map();
       this.t = 0; this.playing = false; this.selClipId = null; this.tool = null;
       this.audioKept = null; this.placingSticker = null; this.selStickerId = null;
+      this.staged = []; this.audioBufs = new Map(); this._tlBound = false;
+      try { this.zoomPps = Math.max(8, Math.min(160, parseFloat(localStorage.getItem('viracut_tlzoom')) || 30)); } catch (e) { this.zoomPps = 30; }
       this.canvas = document.getElementById('edCanvas');
       this.ctx = this.canvas.getContext('2d');
       this.sizeCanvas();
       document.getElementById('edName').textContent = p.name;
-      this.syncMedia();
+      this.syncMedia(); this.bindTimeline();
       this.renderTools(); this.setTool(null); this.renderTimeline(); this.renderStickers(); this.updateUndoRedo();
+      this.updateTransport();
       App.show('screen-editor');
       this.drawOnce();
       if (App.deepLink && App.deepLink.panel) { this.setTool(App.deepLink.panel); App.deepLink = null; }
@@ -82,6 +88,8 @@
       el.muted = false;
       el.addEventListener('loadeddata', function () { self.captureStill(clip); });
       this.vidEls.set(clip.id, el);
+      // route element audio through WebAudio so per-clip volume/fade/mute apply in preview
+      try { if (window.AudioLab) AudioLab.Engine.routeVideo(el, false); } catch (e) {}
     },
     captureStill: function (clip) {
       // end-frame still for crossfade + timeline thumb fallback
@@ -116,26 +124,30 @@
     /* ================= transport ================= */
     toggle: function () { this.playing ? this.pause() : this.play(); },
     play: function () {
+      var self = this;
       var tm = Store.timing();
       if (!this.project || !tm.items.length) { toast('Import media first.'); return; }
       if (this.t >= tm.total - 0.05) this.t = 0;
-      this.playing = true;
-      document.getElementById('edPlay').textContent = '⏸';
-      this.startAudio();
-      this.lastTs = performance.now();
-      var self = this;
-      var loop = function (now) {
-        if (!self.playing) return;
-        var dt = (now - self.lastTs) / 1000; self.lastTs = now;
-        self.t += dt;
-        var total = Store.timing().total;
-        if (self.t >= total) { self.t = total; self.pause(); self.drawOnce(); self.updateTransport(); return; }
-        self.syncClipPlayback();
-        self.drawOnce();
-        self.updateTransport();
+      // decode extracted-audio buffers first if needed
+      this.ensureAudioBuffers().then(function () {
+        if (self.playing) return;
+        self.playing = true;
+        document.getElementById('edPlay').textContent = '⏸';
+        self.startAudio();
+        self.lastTs = performance.now();
+        var loop = function (now) {
+          if (!self.playing) return;
+          var dt = (now - self.lastTs) / 1000; self.lastTs = now;
+          self.t += dt;
+          var total = Store.timing().total;
+          if (self.t >= total) { self.t = total; self.pause(); self.drawOnce(); self.updateTransport(); return; }
+          self.syncClipPlayback();
+          self.drawOnce();
+          self.updateTransport();
+          self.rafId = requestAnimationFrame(loop);
+        };
         self.rafId = requestAnimationFrame(loop);
-      };
-      this.rafId = requestAnimationFrame(loop);
+      });
     },
     pause: function () {
       if (!this.playing) return;
@@ -176,9 +188,27 @@
           } else if (!el.paused) el.pause();
         } catch (e) {}
       });
+      this.applyClipAudioGain(this.t);
+    },
+    /* per-clip volume + fade in/out + mute, applied to the current clip's gain node */
+    applyClipAudioGain: function (t) {
+      var found = Store.clipAt(t);
+      var self = this;
+      this.vidEls.forEach(function (el, id) {
+        try {
+          var mon = el._audMon;
+          if (!mon) return;
+          var target = 0;
+          if (found && found.item.clip.id === id) {
+            target = window.EditorLogic ? EditorLogic.fadeGain(found.item.clip, t - found.item.start) : (found.item.clip.volume == null ? 1 : found.item.clip.volume);
+          }
+          if (Math.abs(mon.gain.value - target) > 0.02) mon.gain.value = target;
+        } catch (e) {}
+      });
     },
     startAudio: function () {
       var p = this.project, voices = [], kept = this.audioKept, ki = 0;
+      var baseT = this.t;
       if (p.music && p.music.buffer) {
         var mo = kept && kept[0] && kept[0].buffer === p.music.buffer ? kept[0].offset : 0;
         voices.push({ buffer: p.music.buffer, volume: p.music.volume, loop: true, offset: mo });
@@ -188,10 +218,28 @@
         if (!v.buffer) return;
         var k = kept && kept[ki];
         var off = (k && k.buffer === v.buffer) ? k.offset : 0;
-        voices.push({ buffer: v.buffer, volume: v.volume, loop: false, offset: off });
+        voices.push({ buffer: v.buffer, volume: v.volume, loop: false, offset: off, resumed: !!(k && k.buffer === v.buffer) });
         ki++;
       });
-      if (voices.length) AudioLab.Engine.start(voices, false);
+      // extracted audio clips: scheduled at their timeline position
+      var self = this;
+      var tm = Store.timing();
+      tm.items.forEach(function (item) {
+        var c = item.clip;
+        if (c.type !== 'audio') return;
+        var buf = self.audioBufs.get(c.id);
+        if (!buf) return;
+        var k = kept && kept[ki];
+        var useKept = k && k.buffer === buf;
+        var off = useKept ? k.offset : (c.in || 0);
+        voices.push({
+          buffer: buf, volume: (c.volume == null ? 1 : c.volume), loop: false,
+          offset: off, resumed: !!useKept, at: item.start, dur: EditorLogic.playDur(c),
+          fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0
+        });
+        ki++;
+      });
+      if (voices.length) AudioLab.Engine.start(voices, false, baseT);
       this.audioKept = null;
     },
     updateTransport: function () {
@@ -199,6 +247,15 @@
       document.getElementById('edTime').textContent = this.t.toFixed(1) + 's / ' + total.toFixed(1) + 's';
       document.getElementById('edDur').textContent = total.toFixed(1) + 's total';
       if (!this._seeking) document.getElementById('edSeek').value = total ? Math.round(this.t / total * 1000) : 0;
+      // timeline playhead
+      var ph = document.getElementById('edPlayhead');
+      if (ph) {
+        var items = this._tlGeom || [];
+        if (items.length && window.EditorLogic) {
+          ph.style.display = 'block';
+          ph.style.left = Math.round(EditorLogic.playheadX(items, this.t)) + 'px';
+        } else ph.style.display = 'none';
+      }
     },
 
     /* ================= compositor ================= */
@@ -305,8 +362,20 @@
       var rot = ((clip.rotation || 0) % 360 + 360) % 360;
       g.translate(W / 2, H / 2);
       if (rot) g.rotate(rot * Math.PI / 180);
+      if (clip.flipH) g.scale(-1, 1);
+      if (clip.flipV) g.scale(1, -1);
       var swap = rot === 90 || rot === 270;
       var dw = swap ? H : W, dh = swap ? W : H;
+      if (clip.type === 'audio') {
+        // audio-only clip: draw a simple label card
+        g.fillStyle = '#101828'; g.fillRect(-dw / 2, -dh / 2, dw, dh);
+        g.fillStyle = '#8B5CF6'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.font = '700 ' + Math.round(dw * 0.09) + 'px sans-serif';
+        g.fillText('🎵', 0, -dh * 0.08);
+        g.fillStyle = '#C9CEDD'; g.font = '600 ' + Math.round(dw * 0.032) + 'px sans-serif';
+        g.fillText(String(clip.name || 'Audio').slice(0, 24), 0, dh * 0.1, dw * 0.9);
+        g.restore(); return;
+      }
       if (clip.type === 'placeholder' || !clip.url) {
         // template placeholder card
         g.fillStyle = '#17142b'; g.fillRect(-dw / 2, -dh / 2, dw, dh);
@@ -380,6 +449,67 @@
 
   window.Editor = Editor;
 })();
+/* ViraCut AI — editor.js: EditorLogic — pure, DOM-free helpers (unit-testable).
+   All math used by the Phase 1 features lives here. */
+(function () {
+  'use strict';
+  var L = {
+    /* clip playback duration after speed */
+    playDur: function (clip) {
+      return Math.max(0.1, (clip.out - clip.in)) / (clip.speed || 1);
+    },
+    /* split point m (media seconds) -> [aIn,aOut,bIn,bOut] */
+    splitBounds: function (clip, m) {
+      m = Math.max(clip.in + 0.25, Math.min(clip.out - 0.25, m));
+      m = +m.toFixed(2);
+      return [clip.in, m, m, clip.out];
+    },
+    /* validate custom speed 0.1x..8x */
+    clampSpeed: function (v) {
+      v = parseFloat(v);
+      if (isNaN(v) || v < 0.1 || v > 8) return null;
+      return +v.toFixed(2);
+    },
+    /* effective audio gain for a clip at `pos` seconds into its timeline playback.
+       Applies volume (0..1), mute, linear fade in/out over fadeIn/fadeOut seconds. */
+    fadeGain: function (clip, pos) {
+      if (clip.muted) return 0;
+      var v = (clip.volume == null ? 1 : clip.volume);
+      var dur = L.playDur(clip);
+      var fi = Math.max(0, clip.fadeIn || 0), fo = Math.max(0, clip.fadeOut || 0);
+      var g = 1;
+      if (fi > 0 && pos < fi) g *= Math.max(0, pos / fi);
+      if (fo > 0 && pos > dur - fo) g *= Math.max(0, (dur - pos) / fo);
+      return Math.max(0, Math.min(1, v * g));
+    },
+    /* estimated export bytes: total seconds * (video + audio bitrate) / 8 */
+    estBytes: function (totalSec, videoBps, audioBps) {
+      return Math.max(0, totalSec) * ((videoBps || 0) + (audioBps || 0)) / 8;
+    },
+    /* move element in array from -> to, returns new array */
+    reorder: function (arr, from, to) {
+      var a = arr.slice();
+      to = Math.max(0, Math.min(a.length - 1, to));
+      var x = a.splice(from, 1)[0];
+      a.splice(to, 0, x);
+      return a;
+    },
+    /* timeline x (px) of project time t.
+       items: [{start, end, x, w}] — x/w are pixel geometry of each timeline card */
+    playheadX: function (items, t) {
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (t <= it.end || i === items.length - 1) {
+          var r = (it.end - it.start) > 0 ? (t - it.start) / (it.end - it.start) : 0;
+          r = Math.max(0, Math.min(1, r));
+          return it.x + r * it.w;
+        }
+      }
+      return 0;
+    }
+  };
+  window.EditorLogic = L;
+})();
 /* ViraCut AI — editor.js (2/3): media import, timeline, clip operations */
 (function () {
   'use strict';
@@ -403,7 +533,7 @@
           var id = Store.uid('clip');
           Store.mediaCache.set(id, url);
           var dur = v.duration || 5;
-          p.clips.push({ id: id, type: 'video', name: f.name, url: url, duration: dur, in: 0, out: dur, speed: 1, rotation: 0, fit: 'cover', transitionIn: 'none' });
+          p.clips.push({ id: id, type: 'video', name: f.name, url: url, duration: dur, in: 0, out: dur, speed: 1, rotation: 0, flipH: false, flipV: false, volume: 1, fadeIn: 0, fadeOut: 0, muted: false, fit: 'cover', transitionIn: 'none' });
           v.onloadedmetadata = null;
           fin();
         };
@@ -431,6 +561,126 @@
     }
   };
 
+  /* ---------- PREVIEW BEFORE ADDING (staging) ---------- */
+  Editor.stageFiles = function (files) {
+    var self = this, p = this.project;
+    if (!p) return;
+    var list = Array.prototype.slice.call(files).filter(function (f) {
+      return f.type.indexOf('video') === 0 || f.type.indexOf('image') === 0;
+    });
+    if (!list.length) { toast('No video/photo files selected.', true); return; }
+    var pending = list.length;
+    list.forEach(function (f) {
+      var url = URL.createObjectURL(f);
+      var item = { file: f, url: url, name: f.name, kind: f.type.indexOf('video') === 0 ? 'video' : 'photo', duration: 0, ready: false };
+      self.staged.push(item);
+      function done() { item.ready = true; if (--pending <= 0 && self.tool === 'media') self.renderPanel(); }
+      if (item.kind === 'video') {
+        var v = document.createElement('video');
+        v.preload = 'metadata'; v.muted = true;
+        v.onloadedmetadata = function () { item.duration = v.duration || 0; done(); };
+        v.onerror = function () { done(); };
+        v.src = url;
+      } else {
+        var im = new Image();
+        im.onload = function () { done(); };
+        im.onerror = function () { done(); };
+        im.src = url;
+      }
+    });
+    this.setTool('media');
+  };
+  Editor.commitStaged = function (idx) {
+    var self = this, p = this.project;
+    var items = idx == null ? this.staged.slice() : [this.staged[idx]];
+    var added = 0;
+    items.forEach(function (item) {
+      var id = Store.uid('clip');
+      Store.mediaCache.set(id, item.url);
+      if (item.kind === 'video') {
+        var dur = item.duration || 5;
+        p.clips.push({ id: id, type: 'video', name: item.name, url: item.url, duration: dur, in: 0, out: dur, speed: 1, rotation: 0, flipH: false, flipV: false, volume: 1, fadeIn: 0, fadeOut: 0, muted: false, fit: 'cover', transitionIn: 'none' });
+      } else {
+        p.clips.push({ id: id, type: 'photo', name: item.name, url: item.url, duration: 3, in: 0, out: 3, speed: 1, rotation: 0, flipH: false, flipV: false, fit: 'cover', transitionIn: 'none', kb: true });
+      }
+      var si = self.staged.indexOf(item);
+      if (si >= 0) self.staged.splice(si, 1);
+      added++;
+    });
+    this.snapshot(); Store.persist();
+    this.syncMedia(); this.renderTimeline(); this.drawOnce(); this.updateTransport(); this.renderPanel();
+    toast(added + ' clip(s) added.');
+  };
+  Editor.discardStaged = function (idx) {
+    var item = this.staged[idx];
+    if (item) { try { URL.revokeObjectURL(item.url); } catch (e) {} this.staged.splice(idx, 1); }
+    this.renderPanel();
+  };
+
+  /* ---------- DUPLICATE ---------- */
+  Editor.duplicateClip = function () {
+    var p = this.project, c = this.selClip();
+    if (!p || !c) { toast('Select a clip first.'); return; }
+    var nc = Object.assign({}, c, { id: Store.uid('clip'), name: (c.name || 'clip') + ' (copy)' });
+    if (c.type === 'audio') {
+      var buf = this.audioBufs.get(c.id);
+      if (buf) this.audioBufs.set(nc.id, buf);
+    }
+    if (c.url) Store.mediaCache.set(nc.id, c.url);
+    p.clips.splice(p.clips.indexOf(c) + 1, 0, nc);
+    this.selClipId = nc.id;
+    this.snapshot(); Store.persist(); this.syncMedia(); this.renderTimeline(); this.drawOnce(); this.updateTransport();
+    toast('Clip duplicated.');
+  };
+
+  /* ---------- EXTRACT AUDIO ---------- */
+  Editor.ensureClipAudioBuffer = function (clip) {
+    var self = this;
+    return new Promise(function (resolve) {
+      var buf = self.audioBufs.get(clip.id);
+      if (buf) return resolve(buf);
+      if (!clip.url) return resolve(null);
+      var decode = function (ab) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        var acx = self._decCtx || (self._decCtx = new AC());
+        return acx.decodeAudioData(ab).then(function (b) {
+          if (b && b.numberOfChannels && b.duration > 0.05) { self.audioBufs.set(clip.id, b); return b; }
+          return null;
+        }).catch(function () { return null; });
+      };
+      fetch(clip.url).then(function (r) { return r.arrayBuffer(); }).then(decode).then(resolve).catch(function () { resolve(null); });
+    });
+  };
+  Editor.ensureAudioBuffers = function () {
+    var self = this, jobs = [];
+    (this.project ? this.project.clips : []).forEach(function (c) {
+      if (c.type === 'audio' && !self.audioBufs.get(c.id) && c.url) jobs.push(self.ensureClipAudioBuffer(c));
+    });
+    return Promise.all(jobs);
+  };
+  Editor.extractAudio = function () {
+    var self = this, c = this.selClip();
+    if (!c) { toast('Select a clip first.'); return; }
+    if (c.type !== 'video' || !c.url) { toast('Select a video clip to extract audio from.', true); return; }
+    toast('Extracting audio…');
+    this.ensureClipAudioBuffer(c).then(function (buf) {
+      if (!buf) { toast('No audio track found in this video.', true); return; }
+      var id = Store.uid('clip');
+      self.audioBufs.set(id, buf);
+      var nc = {
+        id: id, type: 'audio', name: '🎵 ' + (c.name || 'audio'), url: c.url,
+        duration: buf.duration, in: c.in, out: Math.min(c.out, c.in + buf.duration),
+        speed: 1, volume: 1, fadeIn: 0, fadeOut: 0, muted: false
+      };
+      if (nc.out - nc.in < 0.25) { nc.in = 0; nc.out = buf.duration; }
+      Store.mediaCache.set(id, c.url);
+      var idx = self.project.clips.indexOf(c);
+      self.project.clips.splice(idx + 1, 0, nc);
+      c.muted = true; // avoid double audio from the original video
+      self.snapshot(); Store.persist(); self.syncMedia(); self.renderTimeline(); self.drawOnce(); self.updateTransport();
+      toast('Audio extracted — original clip muted.');
+    });
+  };
   Editor.relinkClip = function (clipId) {
     var self = this;
     var inp = document.createElement('input');
@@ -469,37 +719,150 @@
   Editor.snapshot = function () { Store.snapshot(); };
 
   /* ================= timeline render ================= */
+  Editor.setZoom = function (dir) {
+    this.zoomPps = Math.max(8, Math.min(160, Math.round(this.zoomPps * (dir > 0 ? 1.4 : 1 / 1.4))));
+    try { localStorage.setItem('viracut_tlzoom', String(this.zoomPps)); } catch (e) {}
+    this.renderTimeline(); this.updateTransport();
+  };
+  Editor.moveClipTo = function (from, to) {
+    var p = this.project;
+    if (!p || from === to) return;
+    to = Math.max(0, Math.min(p.clips.length - 1, to));
+    var x = p.clips.splice(from, 1)[0];
+    p.clips.splice(to, 0, x);
+    this.snapshot(); Store.persist(); this.renderTimeline(); this.drawOnce(); this.updateTransport();
+  };
+
   Editor.renderTimeline = function () {
     var self = this, el = document.getElementById('edTimeline');
     var p = this.project;
     el.innerHTML = '';
+    this._tlGeom = [];
     if (!p || !p.clips.length) {
       el.innerHTML = '<div class="empty" style="min-width:100%">No clips yet — use Media to import.</div>';
       return;
     }
+    var tm = Store.timing(), x = 0;
     p.clips.forEach(function (c, i) {
+      var playDur = Store.clipPlayDur(c);
+      var w = Math.max(48, Math.round(playDur * self.zoomPps));
+      self._tlGeom.push({ start: tm.items[i] ? tm.items[i].start : 0, end: tm.items[i] ? tm.items[i].end : 0, x: x, w: w });
+      x += w + 8; // card + gap
       var card = document.createElement('div');
       card.className = 'clip-card' + (self.selClipId === c.id ? ' sel' : '');
-      var dur = Store.clipPlayDur(c).toFixed(1) + 's';
+      card.style.flex = '0 0 ' + w + 'px';
+      card.setAttribute('data-id', c.id);
+      var dur = playDur.toFixed(1) + 's';
       var thumb;
       if (!c.url) thumb = '<div class="thumb"></div>';
       else if (c.type === 'video') {
         var st = self.stills.get(c.id);
         thumb = st ? '<div class="thumb"><img src="' + st + '"></div>'
           : '<div class="thumb"><video src="' + c.url + '" muted preload="metadata" playsinline></video></div>';
+      } else if (c.type === 'audio') {
+        thumb = '<div class="thumb" style="font-size:26px">🎵</div>';
       } else thumb = '<div class="thumb"><img src="' + c.url + '"></div>';
-      card.innerHTML = '<span class="badge">' + (c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '🎞' : '🖼') + ' ' + (i + 1) + '</span>' + thumb +
-        '<div class="meta">' + esc(c.name) + ' · ' + dur + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.transitionIn === 'crossfade' ? ' · ⋈' : '') + (c.fx ? ' · ✨' : '') + '</div>' +
+      var badgeIc = c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '🎞' : c.type === 'audio' ? '🎵' : '🖼';
+      card.innerHTML = '<span class="badge">' + badgeIc + ' ' + (i + 1) + '</span>' + thumb +
+        '<div class="meta">' + esc(c.name) + ' · ' + dur + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.transitionIn === 'crossfade' ? ' · ⋈' : '') + (c.fx ? ' · ✨' : '') +
+        ((c.flipH || c.flipV) ? ' · ⇄' : '') + (c.volume != null && c.volume !== 1 && c.type !== 'photo' ? ' · 🔊' + Math.round(c.volume * 100) + '%' : '') + '</div>' +
         (!c.url ? '<div class="relink">' + (c.type === 'placeholder' ? '🎭 Tap to add your clip' : 'Media missing<br>(tap to re-link)') + '</div>' : '');
-      card.onclick = function () {
-        if (!c.url) { self.relinkClip(c.id); return; }
-        self.selClipId = c.id;
-        self.renderTimeline();
-        if (self.tool === 'trim' || self.tool === 'speed' || self.tool === 'rotate' || self.tool === 'transition' || self.tool === 'fx') self.renderPanel();
-      };
+      card.addEventListener('pointerdown', function (e) { self.onCardDown(e, c, card, i); });
       el.appendChild(card);
     });
+    // playhead + drop indicator live inside the scrollable timeline
+    var ph = document.createElement('div'); ph.id = 'edPlayhead'; el.appendChild(ph);
+    var dl = document.createElement('div'); dl.id = 'edDropLine'; el.appendChild(dl);
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  };
+
+  /* long-press to drag a clip card and reorder; plain tap selects */
+  Editor.onCardDown = function (e, c, card, idx) {
+    var self = this;
+    if (e.button != null && e.button !== 0) return;
+    var x0 = e.clientX, moved = false, dragging = false, timer = null;
+    function clear() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    }
+    function onMove(ev) {
+      var dx = ev.clientX - x0;
+      if (!dragging) {
+        if (Math.abs(dx) > 12) { moved = true; clear(); return; } // it's a scroll — bail
+        return;
+      }
+      // dragging: block page scroll on touch, move the card
+      ev.preventDefault();
+      card.style.transform = 'translateX(' + dx + 'px)';
+      card.style.zIndex = '10';
+      var geom = self._tlGeom;
+      var cx = geom[idx].x + geom[idx].w / 2 + dx;
+      var to = idx;
+      for (var i = 0; i < geom.length; i++) {
+        if (cx < geom[i].x + geom[i].w / 2) { to = i; break; }
+        to = i;
+      }
+      var dl = document.getElementById('edDropLine');
+      if (dl) {
+        var gx = to <= idx ? geom[to].x - 4 : geom[to].x + geom[to].w + 4;
+        dl.style.display = 'block'; dl.style.left = gx + 'px';
+      }
+      card._dropTo = to;
+    }
+    function onUp(ev) {
+      clear();
+      card.style.transform = ''; card.style.zIndex = '';
+      card.classList.remove('dragging');
+      var dl = document.getElementById('edDropLine');
+      if (dl) dl.style.display = 'none';
+      if (dragging) {
+        var to = card._dropTo != null ? card._dropTo : idx;
+        card._dropTo = null;
+        if (to !== idx) self.moveClipTo(idx, to);
+        return;
+      }
+      if (moved) return; // was a scroll
+      // tap = select (or re-link)
+      if (!c.url) { self.relinkClip(c.id); return; }
+      self.selClipId = c.id;
+      self.renderTimeline();
+      if (self.tool === 'trim' || self.tool === 'speed' || self.tool === 'rotate' || self.tool === 'transition' || self.tool === 'fx' || self.tool === 'audio') self.renderPanel();
+    }
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    timer = setTimeout(function () {
+      timer = null;
+      if (moved) return;
+      dragging = true;
+      card.classList.add('dragging');
+      try { if (navigator.vibrate) navigator.vibrate(25); } catch (e2) {}
+    }, 450);
+  };
+
+  /* bind once: playhead div is re-created in renderTimeline; seek-scrub on background */
+  Editor.bindTimeline = function () {
+    if (this._tlBound) return;
+    this._tlBound = true;
+    var self = this;
+    var el = document.getElementById('edTimeline');
+    var scrubbing = false;
+    function seekEv(e) {
+      var total = Store.timing().total;
+      if (!total) return;
+      var r = el.getBoundingClientRect();
+      var px = e.clientX - r.left + el.scrollLeft;
+      var w = Math.max(1, el.scrollWidth);
+      self.seek(total * Math.max(0, Math.min(1, px / w)));
+    }
+    el.addEventListener('pointerdown', function (e) {
+      if (e.target.closest && e.target.closest('.clip-card')) return; // card handles itself
+      scrubbing = true; self._seeking = true; seekEv(e);
+    });
+    window.addEventListener('pointermove', function (e) { if (scrubbing) seekEv(e); });
+    window.addEventListener('pointerup', function () { if (scrubbing) { scrubbing = false; self._seeking = false; } });
   };
 
   Editor.selClip = function () { return this.selClipId ? this.findClip(this.selClipId) : null; };
@@ -639,17 +1002,40 @@
     el.appendChild(h(
       '<h4>📥 Import media</h4>' +
       '<div class="row"><button class="btn primary sm" id="mPick">＋ Videos / Photos</button></div>' +
-      '<p class="muted" style="margin-top:8px">MP4 / WebM / JPG / PNG work best. Files stay on this device.</p>' +
+      '<p class="muted" style="margin-top:8px">MP4 / WebM / JPG / PNG work best. Files stay on this device. Preview first, then add.</p>' +
       (this.project.clips.length ?
         '<div class="row" style="margin-top:10px"><button class="btn ghost sm" id="mLeft">◀ Move clip</button>' +
         '<button class="btn ghost sm" id="mRight">Move clip ▶</button>' +
+        '<button class="btn ghost sm" id="mDup">⧉ Duplicate clip</button>' +
         '<button class="btn danger sm" id="mDel">Delete clip</button></div>' : '')
     ));
     el.querySelector('#mPick').onclick = function () { document.getElementById('edFileInput').click(); };
-    var l = el.querySelector('#mLeft'), r = el.querySelector('#mRight'), d = el.querySelector('#mDel');
+    var l = el.querySelector('#mLeft'), r = el.querySelector('#mRight'), d = el.querySelector('#mDel'), dp = el.querySelector('#mDup');
     if (l) l.onclick = function () { self.moveClip(-1); };
     if (r) r.onclick = function () { self.moveClip(1); };
     if (d) d.onclick = function () { self.deleteClip(); };
+    if (dp) dp.onclick = function () { self.duplicateClip(); };
+    // staging: preview before adding
+    if (this.staged.length) {
+      var box = h('<h4 style="margin-top:12px">👀 Preview — add what you want</h4><div class="pv-grid" id="pvGrid"></div>' +
+        '<div class="row" style="margin-top:8px"><button class="btn primary sm" id="pvAll">＋ Add all</button></div>');
+      el.appendChild(box);
+      var grid = box.querySelector('#pvGrid');
+      this.staged.forEach(function (item, i) {
+        var d2 = document.createElement('div');
+        d2.className = 'pv-item';
+        var media = item.kind === 'video'
+          ? '<div class="pv-thumb"><video src="' + item.url + '" muted preload="metadata" playsinline></video></div>'
+          : '<div class="pv-thumb"><img src="' + item.url + '"></div>';
+        d2.innerHTML = media +
+          '<div class="pv-name">' + esc(item.name) + (item.kind === 'video' && item.duration ? ' · ' + item.duration.toFixed(1) + 's' : '') + (item.ready ? '' : ' · …') + '</div>' +
+          '<div class="pv-btns"><button class="btn primary" data-a="add">Add</button><button class="btn ghost" data-a="rm">✕</button></div>';
+        d2.querySelector('[data-a="add"]').onclick = function () { self.commitStaged(i); };
+        d2.querySelector('[data-a="rm"]').onclick = function () { self.discardStaged(i); };
+        grid.appendChild(d2);
+      });
+      box.querySelector('#pvAll').onclick = function () { self.commitStaged(null); };
+    }
   };
 
   /* ---------- TRIM ---------- */
@@ -677,35 +1063,50 @@
   Editor.panel_speed = function (el) {
     var self = this, c = this.selClip();
     if (!c) { el.innerHTML = '<p class="hint">Select a clip first.</p>'; return; }
-    var d = h('<h4>⏩ Speed — ' + esc(c.name) + '</h4><div class="pills" id="spPills"></div><p class="muted" style="margin-top:8px">Speed changes clip length on the timeline.</p>');
+    var d = h('<h4>⏩ Speed — ' + esc(c.name) + '</h4><div class="pills" id="spPills"></div>' +
+      '<div class="row" style="margin-top:10px;align-items:flex-end"><div style="flex:1"><label class="lbl">Custom speed (0.1–8x)</label>' +
+      '<input type="number" id="spCustom" min="0.1" max="8" step="0.05" value="' + c.speed + '" style="min-height:44px"></div>' +
+      '<button class="btn primary sm" id="spApply" style="min-height:44px">Apply</button></div>' +
+      '<p class="muted" style="margin-top:8px">Speed changes clip length on the timeline.</p>');
     el.appendChild(d);
-    [0.5, 1, 1.5, 2].forEach(function (s) {
+    function setSpeed(s) {
+      c.speed = s; self.snapshot(); Store.persist();
+      self.renderTimeline(); self.drawOnce(); self.updateTransport(); self.renderPanel();
+    }
+    [0.25, 0.5, 1, 1.5, 2, 4].forEach(function (s) {
       var b = document.createElement('button');
       b.className = 'pill' + (c.speed === s ? ' on' : ''); b.textContent = s + 'x';
-      b.onclick = function () {
- c.speed = s; self.snapshot(); Store.persist();
-        self.renderTimeline(); self.drawOnce(); self.updateTransport(); self.renderPanel();
-      };
+      b.onclick = function () { setSpeed(s); };
       d.querySelector('#spPills').appendChild(b);
     });
+    d.querySelector('#spApply').onclick = function () {
+      var v = window.EditorLogic ? EditorLogic.clampSpeed(d.querySelector('#spCustom').value) : null;
+      if (v == null) { toast('Enter a speed between 0.1 and 8.', true); return; }
+      setSpeed(v);
+    };
   };
 
-  /* ---------- ROTATE / FIT ---------- */
+  /* ---------- ROTATE / FLIP / FIT ---------- */
   Editor.panel_rotate = function (el) {
     var self = this, c = this.selClip();
     if (!c) { el.innerHTML = '<p class="hint">Select a clip first.</p>'; return; }
     el.appendChild(h(
-      '<h4>🔄 Rotate & Fit — ' + esc(c.name) + '</h4>' +
+      '<h4>🔄 Rotate & Flip — ' + esc(c.name) + '</h4>' +
       '<div class="row"><button class="btn ghost sm" id="rL">⟲ 90°</button>' +
       '<button class="btn ghost sm" id="rR">⟳ 90°</button>' +
       '<button class="btn ghost sm" id="rFit">' + (c.fit === 'cover' ? 'Fit: Cover' : 'Fit: Contain') + '</button></div>' +
+      '<div class="row" style="margin-top:8px"><button class="btn ghost sm" id="rFH">' + (c.flipH ? '✓ ' : '') + '⇋ Flip H</button>' +
+      '<button class="btn ghost sm" id="rFV">' + (c.flipV ? '✓ ' : '') + '⇅ Flip V</button></div>' +
       '<p class="muted" style="margin-top:8px">Rotation: ' + (c.rotation || 0) + '°</p>'
     ));
     function rot(dgr) { c.rotation = (((c.rotation || 0) + dgr) % 360 + 360) % 360; self.snapshot(); Store.persist(); self.drawOnce(); self.renderPanel(); }
+    function flip(k) { c[k] = !c[k]; self.snapshot(); Store.persist(); self.drawOnce(); self.renderPanel(); }
     el.querySelector('#rL').onclick = function () { rot(-90); };
     el.querySelector('#rR').onclick = function () { rot(90); };
+    el.querySelector('#rFH').onclick = function () { flip('flipH'); };
+    el.querySelector('#rFV').onclick = function () { flip('flipV'); };
     el.querySelector('#rFit').onclick = function () {
- c.fit = c.fit === 'cover' ? 'contain' : 'cover'; self.snapshot(); Store.persist(); self.drawOnce(); self.renderPanel();
+      c.fit = c.fit === 'cover' ? 'contain' : 'cover'; self.snapshot(); Store.persist(); self.drawOnce(); self.renderPanel();
     };
   };
 
@@ -957,6 +1358,44 @@
     el = el || document.getElementById('edPanel');
     if (this.tool !== 'audio') return;
     el.innerHTML = '';
+    // ---- per-clip audio (volume / fade / mute / extract) ----
+    var c = this.selClip();
+    var ca = h('<h4>🎚 Clip audio</h4><div id="caBox"></div>');
+    el.appendChild(ca);
+    var cab = ca.querySelector('#caBox');
+    if (!c) cab.innerHTML = '<p class="muted">Select a clip in the timeline to adjust its audio.</p>';
+    else if (c.type === 'photo') cab.innerHTML = '<p class="muted">Photos have no audio — select a video or audio clip.</p>';
+    else {
+      cab.innerHTML =
+        '<div class="kv"><span>' + esc(c.name) + '</span>' +
+        '<button class="btn ghost sm" id="caMute">' + (c.muted ? '🔈 Unmute' : '🔇 Mute') + '</button></div>' +
+        '<label class="lbl">Volume: <span id="caVv">' + Math.round((c.volume == null ? 1 : c.volume) * 100) + '</span>%</label>' +
+        '<input type="range" id="caV" min="0" max="100" value="' + Math.round((c.volume == null ? 1 : c.volume) * 100) + '">' +
+        '<div class="row"><div style="flex:1"><label class="lbl">Fade in (s)</label>' +
+        '<input type="number" id="caFi" min="0" max="5" step="0.5" value="' + (c.fadeIn || 0) + '" style="min-height:44px"></div>' +
+        '<div style="flex:1"><label class="lbl">Fade out (s)</label>' +
+        '<input type="number" id="caFo" min="0" max="5" step="0.5" value="' + (c.fadeOut || 0) + '" style="min-height:44px"></div></div>' +
+        (c.type === 'video' ? '<div class="row" style="margin-top:8px"><button class="btn ghost sm" id="caExt">🎵 Extract audio</button></div>' : '') +
+        '<p class="muted" style="margin-top:6px">Volume & fades apply in preview and are baked into export.</p>';
+      cab.querySelector('#caV').oninput = function (e) {
+        c.volume = e.target.value / 100;
+        cab.querySelector('#caVv').textContent = e.target.value;
+        Store.persist();
+      };
+      cab.querySelector('#caV').onchange = function () { self.snapshot(); };
+      function fadeWire(id, key) {
+        cab.querySelector(id).onchange = function (e) {
+          var v = Math.max(0, Math.min(5, parseFloat(e.target.value) || 0));
+          e.target.value = v; c[key] = v; self.snapshot(); Store.persist();
+        };
+      }
+      fadeWire('#caFi', 'fadeIn'); fadeWire('#caFo', 'fadeOut');
+      cab.querySelector('#caMute').onclick = function () {
+        c.muted = !c.muted; self.snapshot(); Store.persist(); self.renderAudioPanel();
+      };
+      var ex = cab.querySelector('#caExt');
+      if (ex) ex.onclick = function () { self.extractAudio(); };
+    }
     var d = h('<h4>🎵 Music</h4><div id="muBox"></div>' +
       '<div class="row" style="margin:8px 0"><button class="btn ghost sm" id="muPick">＋ Import music</button></div>' +
       '<h4 style="margin-top:14px">🎙️ Voiceover takes</h4><div id="voBox"></div>' +

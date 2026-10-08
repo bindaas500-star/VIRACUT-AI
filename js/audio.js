@@ -98,29 +98,51 @@
     },
     setMonitorLevel: function (v) { this.monitor().gain.value = v; },
     // start all voices; toExport=true routes into the export stream (monitor muted separately)
-    start: function (voices, toExport) {
+    // voices: [{buffer, volume, loop, offset, at (project-time start), dur, fadeIn, fadeOut}]
+    // baseTime = current project time in seconds (voices with at>baseTime start later)
+    start: function (voices, toExport, baseTime) {
       this.stop();
       var c = ac(), mon = this.monitor(), dest = toExport ? this.exportDest() : null;
       var self = this;
+      baseTime = baseTime || 0;
       voices.forEach(function (v) {
         if (!v.buffer) return;
         var src = c.createBufferSource();
         src.buffer = v.buffer; src.loop = !!v.loop;
-        var g = c.createGain(); g.gain.value = (v.volume == null ? 0.8 : v.volume);
+        var g = c.createGain();
+        var vol = (v.volume == null ? 0.8 : v.volume);
         src.connect(g);
         if (toExport && dest) { g.connect(dest); }
         g.connect(mon);
-        try { src.start(0, (v.offset || 0) % v.buffer.duration); } catch (e) { try { src.start(0); } catch (e2) { return; } }
-        self._nodes.push({ src: src, gain: g, buf: v.buffer, loop: !!v.loop, t0: c.currentTime, off: (v.offset || 0) % v.buffer.duration });
+        var at = v.at || 0;
+        var delay = Math.max(0, at - baseTime);
+        var startAt = c.currentTime + delay + 0.02;
+        var off;
+        if (v.loop) { off = (v.offset || 0) % v.buffer.duration; g.gain.value = vol; }
+        else {
+          // resumed (offset already at pause position) vs fresh (seek forward)
+          off = v.resumed ? (v.offset || 0) : Math.min((v.offset || 0) + Math.max(0, baseTime - at), Math.max(0, v.buffer.duration - 0.05));
+          if (off >= v.buffer.duration - 0.03) return; // already finished
+          // gain with optional fade in/out (baked into export too)
+          var fi = Math.max(0, v.fadeIn || 0), fo = Math.max(0, v.fadeOut || 0), dur = v.dur || 0;
+          g.gain.setValueAtTime(vol, startAt);
+          if (fi > 0) { g.gain.setValueAtTime(0.0001, startAt); g.gain.linearRampToValueAtTime(vol, startAt + fi); }
+          if (fo > 0 && dur > fo) {
+            var fe = startAt + dur - fo;
+            g.gain.setValueAtTime(vol, fe); g.gain.linearRampToValueAtTime(0.0001, fe + fo);
+          }
+        }
+        try { src.start(startAt, off % v.buffer.duration); } catch (e) { try { src.start(startAt); } catch (e2) { return; } }
+        self._nodes.push({ src: src, gain: g, buf: v.buffer, loop: !!v.loop, startAt: startAt, at: at, off0: off });
       });
     },
     pause: function () {
       var c = ac(), kept = [];
       this._nodes.forEach(function (n) {
-        var pos;
-        if (n.loop) pos = (n.off + (c.currentTime - n.t0)) % n.buf.duration;
-        else pos = Math.min(n.off + (c.currentTime - n.t0), n.buf.duration - 0.05);
-        kept.push({ buffer: n.buf, volume: n.gain.gain.value, loop: n.loop, offset: pos });
+        var elapsed = c.currentTime - n.startAt;
+        var pos = elapsed < 0 ? n.off0 : n.off0 + elapsed;
+        if (!n.loop) pos = Math.min(pos, n.buf.duration - 0.05);
+        kept.push({ buffer: n.buf, volume: n.gain.gain.value, loop: n.loop, offset: Math.max(0, pos), at: n.at });
         try { n.src.stop(); } catch (e) {}
         try { n.src.disconnect(); n.gain.disconnect(); } catch (e) {}
       });
@@ -146,8 +168,13 @@
         } catch (e) { return; }
       }
       var dest = toExport ? this.exportDest() : null;
-      if (dest) { try { el._audSrc.connect(dest); el._audExp = true; } catch (e) {} }
-      else if (el._audExp) { try { el._audSrc.disconnect(dest); } catch (e) {} el._audExp = false; }
+      if (dest && !el._audExp) {
+        try { el._audSrc.connect(dest); } catch (e) {}
+        el._audExp = true;
+      } else if (!dest && el._audExp) {
+        try { el._audSrc.disconnect(this.exportDest()); } catch (e) {}
+        el._audExp = false;
+      }
     }
   };
 
