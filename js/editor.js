@@ -177,6 +177,7 @@
           var total = Store.timing().total;
           if (self.t >= total) { self.t = total; self.pause(); self.drawOnce(); self.updateTransport(); return; }
           self.syncClipPlayback();
+          self.positionPlayhead();
           self.drawOnce();
           self.updateTransport();
           self.rafId = requestAnimationFrame(loop);
@@ -193,7 +194,7 @@
       this.audioKept = AudioLab.Engine.pause();
       this.updateTransport();
     },
-    seek: function (t) {
+    seek: function (t, opts) {
       var total = Store.timing().total;
       this.t = Math.max(0, Math.min(total, t));
       var found = Store.clipAt(this.t);
@@ -206,7 +207,9 @@
           }
         }
       }
+      this.positionPlayhead();
       this.drawOnce(); this.updateTransport();
+      if (!opts || !opts.noScroll) this.ensurePlayheadVisible();
     },
     syncClipPlayback: function () {
       var self = this;
@@ -598,10 +601,10 @@
       for (var i = 0; i < steps.length; i++) if (steps[i] * pps >= 70) return steps[i];
       return 60;
     },
-    /* how many thumbnails for a clip of durSec seconds: 1 per ~2s, clamped 2..8 */
+    /* how many thumbnails for a clip of durSec seconds: 1 per ~2s, clamped 3..10 */
     thumbCount: function (durSec) {
       var n = Math.round((durSec || 3) / 2);
-      return Math.max(2, Math.min(8, n));
+      return Math.max(3, Math.min(10, n));
     },
     /* pure trim math: returns {in,out} after dragging `which` handle by dt seconds */
     trimApply: function (clip, which, dt) {
@@ -620,15 +623,37 @@
     },
     /* is overlay visible at project time t? */
     ovActive: function (ov, t) { return t >= ov.start && t < ov.start + ov.dur; },
-    /* project time from scroll position (center-playhead model).
-       scrollLeft includes padL left padding. */
-    timeFromScroll: function (scrollLeft, viewW, pps, total, padL) {
-      var t = (scrollLeft - (padL || 0) + viewW / 2) / Math.max(1, pps);
+    /* ---- Unified timeline coordinate model (CapCut-style) ----
+       Content x of project time t inside .tl-inner = headW + t*pps.
+       Track-relative x of time t inside a .tl-track    = t*pps.
+       The playhead is pinned: while headW + t*pps < viewW/2 the timeline
+       stays at scrollLeft=0 and the playhead sits at x = headW + t*pps
+       (NOT centered); past that point the playhead stays centered and the
+       content scrolls under it. At t=0 the first frame of clip 1 sits
+       exactly under the playhead with no gap. */
+    /* scrollLeft that puts project time t under the playhead */
+    scrollForTime: function (t, viewW, pps, headW) {
+      var hw = headW || 0;
+      return Math.max(0, hw + t * pps - viewW / 2);
+    },
+    /* project time under the viewport center for a scroll position */
+    timeFromScroll: function (scrollLeft, viewW, pps, total, headW) {
+      var hw = headW || 0;
+      var t = (scrollLeft + viewW / 2 - hw) / Math.max(1, pps);
       return Math.max(0, Math.min(total, t));
     },
-    /* scrollLeft needed to center project time t */
-    scrollForTime: function (t, viewW, pps) {
-      return Math.max(0, t * pps - viewW / 2);
+    /* viewport x of the playhead for time t at a scroll position */
+    playheadViewX: function (t, pps, headW, scrollLeft) {
+      return (headW || 0) + t * pps - scrollLeft;
+    },
+    /* drop index for clip reorder drag: block whose center span contains cx */
+    dropIndex: function (geom, cx, fromIdx) {
+      var to = fromIdx;
+      for (var i = 0; i < geom.length; i++) {
+        if (cx < geom[i].x + geom[i].w / 2) { to = i; break; }
+        to = i;
+      }
+      return to;
     },
     /* waveform peaks: n values 0..1 from Float32Array channel data */
     wavePeaks: function (data, n) {
@@ -728,15 +753,25 @@
     var self = this, p = this.project;
     var items = idx == null ? this.staged.slice() : [this.staged[idx]];
     var added = 0;
+    // insertion point: after the selected clip, else at the end
+    var at = p.clips.length;
+    if (self.selClipId) {
+      for (var si0 = 0; si0 < p.clips.length; si0++) {
+        if (p.clips[si0].id === self.selClipId) { at = si0 + 1; break; }
+      }
+    }
     items.forEach(function (item) {
       var id = Store.uid('clip');
       Store.mediaCache.set(id, item.url);
+      var clip;
       if (item.kind === 'video') {
         var dur = item.duration || 5;
-        p.clips.push({ id: id, type: 'video', name: item.name, url: item.url, duration: dur, in: 0, out: dur, speed: 1, rotation: 0, flipH: false, flipV: false, volume: 1, fadeIn: 0, fadeOut: 0, muted: false, fit: 'cover', transitionIn: 'none' });
+        clip = { id: id, type: 'video', name: item.name, url: item.url, duration: dur, in: 0, out: dur, speed: 1, rotation: 0, flipH: false, flipV: false, volume: 1, fadeIn: 0, fadeOut: 0, muted: false, fit: 'cover', transitionIn: 'none' };
       } else {
-        p.clips.push({ id: id, type: 'photo', name: item.name, url: item.url, duration: 3, in: 0, out: 3, speed: 1, rotation: 0, flipH: false, flipV: false, fit: 'cover', transitionIn: 'none', kb: true });
+        clip = { id: id, type: 'photo', name: item.name, url: item.url, duration: 3, in: 0, out: 3, speed: 1, rotation: 0, flipH: false, flipV: false, fit: 'cover', transitionIn: 'none', kb: true };
       }
+      p.clips.splice(at, 0, clip);
+      at++;
       var si = self.staged.indexOf(item);
       if (si >= 0) self.staged.splice(si, 1);
       added++;
@@ -867,11 +902,21 @@
     this.snapshot(); Store.persist(); this.renderTimeline(); this.drawOnce(); this.updateTransport();
   };
 
-  /* ================= Phase 2 timeline: absolute time-positioned tracks + fixed center playhead ================= */
-  Editor.tlPad = function () {
-    var sc = document.getElementById('edTlScroll');
-    var vw = sc ? sc.clientWidth || 320 : 320;
-    return vw / 2;
+  /* ================= Phase 2 timeline: absolute time-positioned tracks ================= */
+  Editor.tlPad = function () { return 0; }; // legacy: no padding in unified model
+  /* width of the lane icon head (must match CSS .tl-head flex-basis) */
+  Editor.headW = function () {
+    try {
+      var h = document.querySelector('#edTlInner .tl-head');
+      if (h && h.offsetWidth) return h.offsetWidth;
+    } catch (e) {}
+    return 26;
+  };
+  /* place the playhead at the current time (content coordinates) */
+  Editor.positionPlayhead = function () {
+    var ph = document.getElementById('edPlayhead');
+    if (!ph) return;
+    ph.style.left = Math.round(this.headW() + this.t * this.zoomPps) + 'px';
   };
   /* ============ UNIFIED TIMELINE (Phase 3): 4 lanes, one scroll, one playhead ============ */
   Editor.renderTimeline = function () {
@@ -885,28 +930,27 @@
     var p = this.project;
     vTrack.innerHTML = ''; aTrack.innerHTML = ''; tTrack.innerHTML = ''; oTrack.innerHTML = ''; markers.innerHTML = '';
     this._tlGeom = [];
-    var pps = this.zoomPps, pad = this.tlPad();
-    this._padL = pad;
+    var pps = this.zoomPps, hw = this.headW();
     var L = window.EditorLogic;
     var tm = Store.timing(), total = tm.total;
-    // time markers (shared ruler)
+    // time markers (shared ruler): inner coordinates = headW + t*pps
     var step = L.markerStep(pps), mhtml = '';
     for (var mt = 0; mt <= total + 0.01; mt += step) {
-      mhtml += '<span class="ed2-marker" style="left:' + Math.round(pad + mt * pps) + 'px">' + L.fmtTime(mt) + '</span>';
+      mhtml += '<span class="ed2-marker" style="left:' + Math.round(hw + mt * pps) + 'px">' + L.fmtTime(mt) + '</span>';
     }
     markers.innerHTML = mhtml;
-    var innerW = Math.max(Math.round(pad * 2 + total * pps + 90), 200);
+    var innerW = Math.max(Math.round(hw + total * pps + 120), 200);
     markers.style.width = innerW + 'px';
     inner.style.width = innerW + 'px';
 
     /* ---- VIDEO LANE: thumbnail strips, no cards ---- */
     if (!p || !p.clips.length) {
-      vTrack.appendChild(this._addTile(pad, function () { self.setTool('media'); }));
+      vTrack.appendChild(this._addTile(function () { self.setTool('media'); }));
     } else {
       p.clips.forEach(function (c, i) {
         var it = tm.items[i]; if (!it) return;
         var playDur = Store.clipPlayDur(c);
-        var gx = pad + it.start * pps, gw = Math.max(40, Math.round(playDur * pps));
+        var gx = it.start * pps, gw = Math.max(40, Math.round(playDur * pps));
         self._tlGeom.push({ start: it.start, end: it.end, x: gx, w: gw });
         var blk = document.createElement('div');
         blk.className = 'clip-block' + (self.selClipId === c.id ? ' sel' : '');
@@ -930,36 +974,37 @@
       // "+" tile at end of video track
       var add = document.createElement('div');
       add.className = 'tl-add';
-      add.style.left = Math.round(pad + total * pps + 8) + 'px';
+      add.style.left = Math.round(total * pps + 8) + 'px';
       add.textContent = '＋'; add.title = 'Add media';
       add.addEventListener('click', function () { self.setTool('media'); });
       vTrack.appendChild(add);
     }
 
     /* ---- AUDIO LANE ---- */
-    this._renderAudioLane(aTrack, tm, total, pps, pad);
+    this._renderAudioLane(aTrack, tm, total, pps);
     /* ---- TEXT LANE ---- */
-    this._renderTextLane(tTrack, pps, pad);
+    this._renderTextLane(tTrack, pps);
     /* ---- OVERLAY LANE (single) ---- */
-    this._renderOverlayLane(oTrack, pps, pad);
+    this._renderOverlayLane(oTrack, pps);
 
     this.renderClipStrip();
-    this.centerPlayhead();
+    this.positionPlayhead();
+    this.ensurePlayheadVisible();
     this.renderEmptyImport();
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   };
 
-  /* small "+" tile for empty lanes */
-  Editor._addTile = function (pad, cb) {
+  /* small "+" tile for empty lanes (track-relative x) */
+  Editor._addTile = function (cb) {
     var d = document.createElement('div');
     d.className = 'tl-add';
-    d.style.left = Math.round(pad) + 'px';
+    d.style.left = '8px';
     d.textContent = '＋';
     d.addEventListener('click', cb);
     return d;
   };
 
-  Editor._renderAudioLane = function (el, tm, total, pps, pad) {
+  Editor._renderAudioLane = function (el, tm, total, pps) {
     var self = this, p = this.project, L = window.EditorLogic;
     var hasAny = false;
     function block(x, w, inner, sel, cb) {
@@ -974,14 +1019,14 @@
     if (p.music) {
       hasAny = true;
       var g = L.laneGeom(0, total, pps);
-      block(pad + g.x, g.w, '🎵 ' + esc(p.music.name || 'Music'), false, function () { self.setTool('audio'); });
+      block(g.x, g.w, '🎵 ' + esc(p.music.name || 'Music'), false, function () { self.setTool('audio'); });
     }
     tm.items.forEach(function (item) {
       var c = item.clip;
       if (c.type !== 'audio') return;
       hasAny = true;
       var g2 = L.laneGeom(item.start, item.end - item.start, pps);
-      var d = block(pad + g2.x, g2.w, '', self.selClipId === c.id, function () {
+      var d = block(g2.x, g2.w, '', self.selClipId === c.id, function () {
         self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
         self.setTool(null); self.renderTimeline(); self.drawOnce();
       });
@@ -1004,21 +1049,21 @@
       sp.textContent = '🎵';
       d.appendChild(sp);
     });
-    if (!hasAny) el.appendChild(this._addTile(pad, function () { self.setTool('audio'); }));
+    if (!hasAny) el.appendChild(this._addTile(function () { self.setTool('audio'); }));
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   };
 
-  Editor._renderTextLane = function (el, pps, pad) {
+  Editor._renderTextLane = function (el, pps) {
     var self = this, p = this.project, L = window.EditorLogic;
     if (!p.texts.length) {
-      el.appendChild(this._addTile(pad, function () { self.textDialog(); }));
+      el.appendChild(this._addTile(function () { self.textDialog(); }));
       return;
     }
     p.texts.forEach(function (tx) {
       var g = L.laneGeom(tx.start, Math.max(0.5, tx.end - tx.start), pps);
       var d = document.createElement('div');
       d.className = 'tx-block' + (self.selTxId === tx.id ? ' sel' : '');
-      d.style.left = Math.round(pad + g.x) + 'px';
+      d.style.left = Math.round(g.x) + 'px';
       d.style.width = Math.max(28, Math.round(g.w)) + 'px';
       d.textContent = 'T ' + String(tx.text || '').slice(0, 14);
       d.addEventListener('click', function (e) {
@@ -1030,17 +1075,17 @@
     });
   };
 
-  Editor._renderOverlayLane = function (el, pps, pad) {
+  Editor._renderOverlayLane = function (el, pps) {
     var self = this, p = this.project, L = window.EditorLogic;
     if (!p.overlays.length) {
-      el.appendChild(this._addTile(pad, function () { self.setTool('overlay'); }));
+      el.appendChild(this._addTile(function () { self.setTool('overlay'); }));
       return;
     }
     p.overlays.forEach(function (ov) {
       var g = L.laneGeom(ov.start, ov.dur, pps);
       var d = document.createElement('div');
       d.className = 'ov-block' + (self.selOvId === ov.id ? ' sel' : '');
-      d.style.left = Math.round(pad + g.x) + 'px';
+      d.style.left = Math.round(g.x) + 'px';
       d.style.width = Math.max(28, Math.round(g.w)) + 'px';
       d.textContent = (ov.type === 'video' ? '🎞' : '🖼');
       d.title = String(ov.name || 'overlay');
@@ -1136,7 +1181,7 @@
       var tm = Store.timing(), it = null;
       for (var i = 0; i < tm.items.length; i++) if (tm.items[i].clip.id === c.id) it = tm.items[i];
       if (it) {
-        card.style.left = Math.round((self._padL || 0) + it.start * pps) + 'px';
+        card.style.left = Math.round(it.start * pps) + 'px';
         card.style.width = Math.max(40, Math.round(Store.clipPlayDur(c) * pps)) + 'px';
       }
       self.drawOnce();
@@ -1177,16 +1222,27 @@
       card.style.zIndex = '10';
       var geom = self._tlGeom;
       var cx = geom[idx].x + geom[idx].w / 2 + dx;
-      var to = idx;
-      for (var i = 0; i < geom.length; i++) {
-        if (cx < geom[i].x + geom[i].w / 2) { to = i; break; }
-        to = i;
-      }
+      var to = window.EditorLogic.dropIndex(geom, cx, idx);
       card._dropTo = to;
+      // insertion indicator line at the drop boundary
+      var ind = document.getElementById('edDropInd');
+      if (!ind) {
+        ind = document.createElement('div');
+        ind.id = 'edDropInd'; ind.className = 'tl-drop-ind';
+        card.parentNode.appendChild(ind);
+      }
+      if (to === idx) { ind.style.display = 'none'; }
+      else {
+        var ix = to < idx ? geom[to].x : geom[to].x + geom[to].w;
+        ind.style.left = Math.round(ix) + 'px';
+        ind.style.display = 'block';
+      }
     }
     function onUp(ev) {
       clear();
       card.style.transform = ''; card.style.zIndex = '';
+      var ind = document.getElementById('edDropInd');
+      if (ind) ind.style.display = 'none';
       if (dragging) {
         var to = card._dropTo != null ? card._dropTo : idx;
         card._dropTo = null;
@@ -1210,18 +1266,23 @@
     }, 450);
   };
 
-  /* center the fixed playhead on current time */
-  Editor.centerPlayhead = function () {
+  /* keep the playhead visible: pin timeline left edge at scrollLeft=0 while
+     the playhead is in the left half of the viewport (CapCut-style);
+     otherwise keep the playhead centered. */
+  Editor.ensurePlayheadVisible = function () {
     var sc = document.getElementById('edTlScroll');
     if (!sc) return;
     var L = window.EditorLogic;
+    var target = L.scrollForTime(this.t, sc.clientWidth || 320, this.zoomPps, this.headW());
     this._progScroll = true;
-    try { sc.scrollLeft = Math.max(0, L.scrollForTime(this.t, sc.clientWidth || 320, this.zoomPps) + (this._padL || 0)); } catch (e) {}
+    try { if (Math.abs(sc.scrollLeft - target) > 1) sc.scrollLeft = Math.max(0, target); } catch (e) {}
     var self = this;
     setTimeout(function () { self._progScroll = false; }, 80);
   };
+  Editor.centerPlayhead = function () { return this.ensurePlayheadVisible(); };
 
-  /* bind once: scrub, playhead drag, pinch zoom, manual-scroll seek */
+  /* bind once: scrub, playhead drag, pinch zoom, manual-scroll seek.
+     Unified model: viewportX_of(t) = headW + t*pps - scrollLeft. */
   Editor.bindTimeline = function () {
     if (this._tlBound) return;
     this._tlBound = true;
@@ -1233,33 +1294,31 @@
     function seekFromClientX(cx) {
       var total = Store.timing().total; if (!total) return;
       var r = sc.getBoundingClientRect();
-      var t = ((sc.scrollLeft + (cx - r.left) - (self._padL || 0)) / self.zoomPps);
+      var t = (sc.scrollLeft + (cx - r.left) - self.headW()) / self.zoomPps;
       self.seek(Math.max(0, Math.min(total, t)));
     }
     inner.addEventListener('pointerdown', function (e) {
-      if (e.target.closest && e.target.closest('.clip-block')) return;
+      if (e.target.closest && (e.target.closest('.clip-block') || e.target.closest('#edPlayhead') || e.target.closest('.tl-add'))) return;
       scrubbing = true; self._seeking = true; seekFromClientX(e.clientX);
     });
     window.addEventListener('pointermove', function (e) { if (scrubbing) seekFromClientX(e.clientX); });
-    window.addEventListener('pointerup', function () { if (scrubbing) { scrubbing = false; self._seeking = false; self.centerPlayhead(); } });
-    // drag the playhead itself = move timeline under it
+    window.addEventListener('pointerup', function () { if (scrubbing) { scrubbing = false; self._seeking = false; self.ensurePlayheadVisible(); } });
+    // drag the playhead itself: playhead follows the finger; settle on release
     var phDrag = null;
     ph.addEventListener('pointerdown', function (e) {
       e.preventDefault(); e.stopPropagation();
-      phDrag = e.clientX;
+      phDrag = true;
       if (self.playing) self.pause();
     });
     window.addEventListener('pointermove', function (e) {
-      if (phDrag == null) return;
-      var dx = e.clientX - phDrag; phDrag = e.clientX;
-      self._progScroll = true;
-      sc.scrollLeft -= dx;
-      var total = Store.timing().total;
-      if (total) self.seek(L.timeFromScroll(sc.scrollLeft, sc.clientWidth || 320, self.zoomPps, total, self._padL || 0));
-      self._progScroll = false;
+      if (!phDrag) return;
+      var total = Store.timing().total; if (!total) return;
+      var r = sc.getBoundingClientRect();
+      var t = (sc.scrollLeft + (e.clientX - r.left) - self.headW()) / self.zoomPps;
+      self.seek(Math.max(0, Math.min(total, t)), { noScroll: true });
     });
-    window.addEventListener('pointerup', function () { phDrag = null; });
-    // manual scroll (not programmatic) = scrub to center; pause if playing
+    window.addEventListener('pointerup', function () { if (phDrag) { phDrag = null; self.ensurePlayheadVisible(); } });
+    // manual scroll (not programmatic) = scrub to viewport center; pause if playing
     var scrollT = null;
     sc.addEventListener('scroll', function () {
       if (self._progScroll) return;
@@ -1267,7 +1326,7 @@
       scrollT = setTimeout(function () {
         if (self.playing) self.pause();
         var total = Store.timing().total; if (!total) return;
-        var t = L.timeFromScroll(sc.scrollLeft, sc.clientWidth || 320, self.zoomPps, total, self._padL || 0);
+        var t = L.timeFromScroll(sc.scrollLeft, sc.clientWidth || 320, self.zoomPps, total, self.headW());
         self.seek(t);
       }, 90);
     }, { passive: true });
