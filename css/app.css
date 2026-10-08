@@ -391,6 +391,7 @@ body { touch-action: manipulation; }
 .clip-block .thumbs{display:flex;height:100%;overflow:hidden}
 .clip-block .thumbs img{height:100%;flex:1 0 auto;object-fit:cover;min-width:0}
 .clip-block .cbadge{position:absolute;top:2px;left:3px;font-size:9px;background:rgba(0,0,0,.55);border-radius:5px;padding:0 4px;pointer-events:none}
+.clip-block .cbadge.rev{left:auto;right:3px;background:rgba(139,92,246,.8);color:#fff;font-weight:700}
 .trim-handle{position:absolute;top:0;bottom:0;width:20px;background:rgba(139,92,246,.9);z-index:5;touch-action:none;cursor:ew-resize;display:flex;align-items:center;justify-content:center}
 .trim-handle.l{left:0;border-radius:6px 0 0 6px}
 .trim-handle.r{right:0;border-radius:0 6px 6px 0}
@@ -412,6 +413,9 @@ body { touch-action: manipulation; }
 .cs-btn{flex:0 0 auto;min-width:60px;min-height:52px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--txt);font-size:10.5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 8px;cursor:pointer}
 .cs-btn .ic{font-size:18px}
 .cs-btn.soon{opacity:.45}
+.cs-btn.on{border-color:#8B5CF6;background:rgba(139,92,246,.18);color:#c4b5fd}
+.cs-btn.primary{background:#8B5CF6;border-color:#8B5CF6;color:#fff}
+.cs-hint{align-self:center;font-size:11px;color:var(--muted);white-space:nowrap;padding:0 8px}
 /* bottom toolbar */
 .tl-toolbar{display:flex;gap:2px;overflow-x:auto;padding:8px 16px 10px 4px;border-top:1px solid var(--line);background:rgba(10,10,20,.97);position:sticky;bottom:0;z-index:30;scrollbar-width:none}
 .tl-toolbar::-webkit-scrollbar{display:none}
