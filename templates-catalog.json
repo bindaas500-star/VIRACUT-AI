@@ -1143,8 +1143,270 @@
    "overlays": [
     "particles"
    ]
+  },
+  {
+   "id": "remote_noor",
+   "title": "Noor",
+   "icon": "🌙",
+   "category": "islamic",
+   "slots": 4,
+   "duration": 14,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-08",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Moonlit Dua (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 3,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "reveal",
+     "filter": "warm",
+     "trans": "cut",
+     "text": {
+      "content": "سُبْحَانَ اللَّهِ",
+      "urdu": true,
+      "size": 10,
+      "pos": "mid",
+      "color": "#fde68a",
+      "glow": "#f59e0b",
+      "anim": "fadeup"
+     }
+    },
+    {
+     "dur": 3.5,
+     "slot": 2,
+     "anim": "slow-zoom",
+     "fx": "gloworbs",
+     "filter": "warm",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.5,
+     "slot": 3,
+     "anim": "pan-left",
+     "fx": "smoke",
+     "filter": "cool",
+     "trans": "fade",
+     "text": {
+      "content": "نُور",
+      "urdu": true,
+      "size": 12,
+      "pos": "mid",
+      "color": "#e0f2fe",
+      "glow": "#38bdf8",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 4,
+     "slot": 4,
+     "anim": "kenburns-out",
+     "fx": "reveal",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "جمعہ مبارک",
+      "urdu": true,
+      "size": 8,
+      "pos": "bottom",
+      "color": "#fde68a",
+      "glow": "#f59e0b",
+      "anim": "type"
+     }
+    }
+   ],
+   "overlays": [
+    "gloworbs",
+    "smoke"
+   ]
+  },
+  {
+   "id": "remote_move_on",
+   "title": "Move On",
+   "icon": "💔",
+   "category": "sad",
+   "slots": 5,
+   "duration": 12,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-08",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Tuta Dil (AI loop)",
+    "mood": "emotional"
+   },
+   "scenes": [
+    {
+     "dur": 2,
+     "slot": 1,
+     "anim": "static",
+     "fx": "flash",
+     "filter": "mono",
+     "trans": "cut",
+     "text": {
+      "content": "اب موو آن",
+      "urdu": true,
+      "size": 10,
+      "pos": "mid",
+      "color": "#ffffff",
+      "glow": "#64748b",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.2,
+     "slot": 2,
+     "anim": "pan-right",
+     "fx": "shake",
+     "filter": "mono",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.4,
+     "slot": 3,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "cool",
+     "trans": "cut",
+     "text": {
+      "content": "بھول گیا ہوں تجھے",
+      "urdu": true,
+      "size": 8,
+      "pos": "bottom",
+      "color": "#e2e8f0",
+      "glow": "#94a3b8",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 2.4,
+     "slot": 4,
+     "anim": "pan-left",
+     "fx": "shake",
+     "filter": "mono",
+     "trans": "cut"
+    },
+    {
+     "dur": 3,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "glitch",
+     "filter": "cool",
+     "trans": "fade",
+     "text": {
+      "content": "تم اپنا راستہ لو",
+      "urdu": true,
+      "size": 8,
+      "pos": "bottom",
+      "color": "#ffffff",
+      "glow": "#f43f5e",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "rain",
+    "grain"
+   ]
+  },
+  {
+   "id": "remote_desi_dhamaal",
+   "title": "Desi Dhamaal",
+   "icon": "🥁",
+   "category": "beatsync",
+   "slots": 6,
+   "duration": 15,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-08",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Desi Dhamaka (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 2,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "DESI DHAMAAL",
+      "size": 11,
+      "pos": "mid",
+      "color": "#fde047",
+      "glow": "#f59e0b",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.5,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.5,
+     "slot": 3,
+     "anim": "pan-right",
+     "fx": "punch",
+     "filter": "warm",
+     "trans": "cut"
+    },
+    {
+     "dur": 2.5,
+     "slot": 4,
+     "anim": "kenburns-out",
+     "fx": "shake",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "🔥",
+      "size": 12,
+      "pos": "mid",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2.5,
+     "slot": 5,
+     "anim": "slow-zoom",
+     "fx": "neon",
+     "filter": "vivid",
+     "trans": "zoom"
+    },
+    {
+     "dur": 3,
+     "slot": 6,
+     "anim": "kenburns-in",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "fade",
+     "text": {
+      "content": "DROP THE BEAT",
+      "size": 8,
+      "pos": "bottom",
+      "color": "#ffffff",
+      "glow": "#a855f7",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles",
+    "confetti"
+   ]
   }
  ],
- "updated": "2026-10-07",
- "version": 5
+ "updated": "2026-10-08",
+ "version": 6
 }
