@@ -217,7 +217,7 @@
         if (c.type === 'video') {
           var el = this.vidEls.get(c.id);
           if (el && el.readyState >= 1) {
-            try { el.currentTime = Math.min(c.in + (this.t - found.item.start) * (c.speed || 1), c.out - 0.05); } catch (e) {}
+            try { el.currentTime = Math.min(window.EditorLogic.clipVideoTime(c, found.item.start, this.t), c.out - 0.05); } catch (e) {}
           }
         }
       }
@@ -228,15 +228,24 @@
     syncClipPlayback: function () {
       var self = this;
       var found = Store.clipAt(this.t);
+      var L = window.EditorLogic;
       this.vidEls.forEach(function (el, id) {
         var isCur = found && found.item.clip.id === id;
         try {
           if (isCur) {
             var c = found.item.clip;
             el.playbackRate = c.speed || 1;
-            if (el.paused) { var p = el.play(); if (p && p.catch) p.catch(function () {}); }
-            var exp = c.in + (self.t - found.item.start) * (c.speed || 1);
-            if (Math.abs(el.currentTime - exp) > 0.4 && el.readyState >= 1) el.currentTime = Math.min(exp, c.out - 0.05);
+            var exp = L.clipVideoTime(c, found.item.start, self.t);
+            if (c.reversed) {
+              /* Phase 9: video elements can't play backward natively — keep the
+                 element paused and seek it to the reversed position as project
+                 time advances. Audio keeps playing forward (documented). */
+              if (!el.paused) el.pause();
+              if (el.readyState >= 1 && Math.abs(el.currentTime - exp) > 0.12) el.currentTime = Math.min(exp, c.out - 0.05);
+            } else {
+              if (el.paused) { var p = el.play(); if (p && p.catch) p.catch(function () {}); }
+              if (Math.abs(el.currentTime - exp) > 0.4 && el.readyState >= 1) el.currentTime = Math.min(exp, c.out - 0.05);
+            }
           } else if (!el.paused) el.pause();
         } catch (e) {}
       });
@@ -337,6 +346,8 @@
       // crossfade: previous clip end-still dissolving
       var xf = item.clip.transitionIn === 'crossfade' && idx > 0 && (t - item.start) < XF;
       this.drawClipFX(g, item, W, H, t);
+      // Phase 9: crop mode overlay (preview only — never in export)
+      if (!forExport && this.cropModeId === item.clip.id) this.drawCropOverlay(g, W, H);
       if (xf) {
         var prev = Store.timing().items[idx - 1];
         var still = this.stills.get(prev.clip.id);
@@ -587,7 +598,8 @@
       if (clip.type === 'video') {
         var el = this.vidEls.get(clip.id);
         if (el && el.readyState >= 2 && el.videoWidth) {
-          this.drawFit(g, el, el.videoWidth, el.videoHeight, dw, dh, clip.fit || 'cover');
+          if (clip.crop) this.drawFitCrop(g, el, window.EditorLogic.cropSrcRect(clip.crop, el.videoWidth, el.videoHeight), dw, dh, clip.fit || 'cover');
+          else this.drawFit(g, el, el.videoWidth, el.videoHeight, dw, dh, clip.fit || 'cover');
         } else {
           g.fillStyle = '#141428'; g.fillRect(-dw / 2, -dh / 2, dw, dh);
           g.fillStyle = '#9AA0B4'; g.font = '400 15px sans-serif'; g.textAlign = 'center';
@@ -596,7 +608,8 @@
       } else {
         var im = this.imgEls.get(clip.id);
         if (im && im.complete && im.naturalWidth) {
-          if (clip.kb === false) { this.drawFit(g, im, im.width, im.height, dw, dh, clip.fit || 'cover'); }
+          if (clip.crop) this.drawFitCrop(g, im, window.EditorLogic.cropSrcRect(clip.crop, im.naturalWidth, im.naturalHeight), dw, dh, clip.fit || 'cover');
+          else if (clip.kb === false) { this.drawFit(g, im, im.width, im.height, dw, dh, clip.fit || 'cover'); }
           else {
             // Ken Burns: gentle zoom + pan across the clip
             var pr = (t - item.start) / Math.max(0.01, item.end - item.start);
@@ -614,6 +627,167 @@
       var s = fit === 'contain' ? Math.min(dw / sw, dh / sh) : Math.max(dw / sw, dh / sh);
       var w = sw * s, h = sh * s;
       g.drawImage(src, -w / 2, -h / 2, w, h);
+    },
+    /* Phase 9: draw only the cropped source rect `sr` {x,y,w,h} (source px),
+       fitted into the destination. Works for video elements and images. */
+    drawFitCrop: function (g, src, sr, dw, dh, fit) {
+      if (!sr || sr.w < 1 || sr.h < 1) return;
+      var s = fit === 'contain' ? Math.min(dw / sr.w, dh / sr.h) : Math.max(dw / sr.w, dh / sr.h);
+      var w = sr.w * s, h = sr.h * s;
+      g.drawImage(src, sr.x, sr.y, sr.w, sr.h, -w / 2, -h / 2, w, h);
+    },
+    /* ================= Phase 9: CROP MODE =================
+       Draggable crop rectangle over the preview. The rect is stored as
+       fractions of the SOURCE dimensions; the overlay is drawn in screen
+       space on the unrotated source frame (crop operates on source). */
+    cropModeId: null,
+    _cropDraft: null,
+    _cropDrag: null,
+    enterCropMode: function () {
+      var c = this.selClip();
+      if (!c) { toast('Select a clip first.', true); return; }
+      if (c.type !== 'video' && c.type !== 'photo') { toast('Crop works on video/photo clips.', true); return; }
+      this.cropModeId = c.id;
+      var L = window.EditorLogic;
+      if (c.crop) this._cropDraft = { x: c.crop.x, y: c.crop.y, w: c.crop.w, h: c.crop.h };
+      else this._cropDraft = L.cropFitAspect(this.project.aspect);
+      this.trimModeId = null;
+      this.setTool && this.setTool(null);
+      this.bindCropMode();
+      // jump playhead to the clip so the crop UI is visible
+      var tm = Store.timing();
+      for (var i = 0; i < tm.items.length; i++) {
+        if (tm.items[i].clip.id === c.id) { this.seek(tm.items[i].start); break; }
+      }
+      this.renderTimeline(); this.renderClipStrip(); this.drawOnce();
+      toast('Drag corners to resize, drag inside to move.');
+    },
+    exitCropMode: function () {
+      this.cropModeId = null; this._cropDraft = null; this._cropDrag = null;
+      this.renderClipStrip(); this.drawOnce();
+    },
+    applyCrop: function () {
+      var c = this.selClip();
+      if (!c || !this._cropDraft) { this.exitCropMode(); return; }
+      var d = this._cropDraft;
+      c.crop = { x: +d.x.toFixed(4), y: +d.y.toFixed(4), w: +d.w.toFixed(4), h: +d.h.toFixed(4) };
+      this.snapshot(); Store.persist();
+      this.exitCropMode();
+      this.renderTimeline(); this.drawOnce();
+      toast('Crop applied.');
+    },
+    cancelCrop: function () {
+      this.exitCropMode();
+      this.renderTimeline();
+      toast('Crop cancelled.');
+    },
+    /* source dimensions for the crop UI */
+    cropSourceDims: function (clip) {
+      if (clip.type === 'video') {
+        var el = this.vidEls.get(clip.id);
+        if (el && el.videoWidth) return { sw: el.videoWidth, sh: el.videoHeight };
+      } else {
+        var im = this.imgEls.get(clip.id);
+        if (im && im.naturalWidth) return { sw: im.naturalWidth, sh: im.naturalHeight };
+      }
+      return null;
+    },
+    /* screen-space rect of the (unrotated, cover-fit) source frame */
+    cropFrameRect: function (clip, W, H) {
+      var dims = this.cropSourceDims(clip);
+      if (!dims) return null;
+      var s = Math.max(W / dims.sw, H / dims.sh);
+      var vw = dims.sw * s, vh = dims.sh * s;
+      return { x: (W - vw) / 2, y: (H - vh) / 2, w: vw, h: vh, s: s, sw: dims.sw, sh: dims.sh };
+    },
+    /* draw the crop overlay in screen space; called from composite() */
+    drawCropOverlay: function (g, W, H) {
+      var c = this.selClip();
+      if (!c || c.id !== this.cropModeId || !this._cropDraft) return;
+      var fr = this.cropFrameRect(c, W, H);
+      if (!fr) return;
+      var r = this._cropDraft;
+      var rx = fr.x + r.x * fr.sw * fr.s, ry = fr.y + r.y * fr.sh * fr.s;
+      var rw = r.w * fr.sw * fr.s, rh = r.h * fr.sh * fr.s;
+      g.save();
+      // darken outside the rect
+      g.fillStyle = 'rgba(0,0,0,0.62)';
+      g.fillRect(0, 0, W, ry);
+      g.fillRect(0, ry + rh, W, H - ry - rh);
+      g.fillRect(0, ry, rx, rh);
+      g.fillRect(rx + rw, ry, W - rx - rw, rh);
+      // border
+      g.strokeStyle = '#a78bfa'; g.lineWidth = Math.max(2, W * 0.006);
+      g.strokeRect(rx, ry, rw, rh);
+      // rule-of-thirds grid
+      g.strokeStyle = 'rgba(167,139,250,0.45)'; g.lineWidth = 1;
+      for (var i = 1; i <= 2; i++) {
+        g.beginPath(); g.moveTo(rx + rw * i / 3, ry); g.lineTo(rx + rw * i / 3, ry + rh); g.stroke();
+        g.beginPath(); g.moveTo(rx, ry + rh * i / 3); g.lineTo(rx + rw, ry + rh * i / 3); g.stroke();
+      }
+      // corner handles
+      var hs = Math.max(14, W * 0.035);
+      g.fillStyle = '#fff';
+      [[rx, ry], [rx + rw, ry], [rx, ry + rh], [rx + rw, ry + rh]].forEach(function (pt) {
+        g.fillRect(pt[0] - hs / 2, pt[1] - hs / 2, hs, hs);
+      });
+      g.restore();
+    },
+    /* pointer interaction for crop mode; bound once */
+    bindCropMode: function () {
+      var self = this;
+      var cv = document.getElementById('edCanvas');
+      if (!cv || cv._cropBound) return;
+      cv._cropBound = true;
+      function toCanvas(e) {
+        var r = cv.getBoundingClientRect();
+        return { x: (e.clientX - r.left) * cv.width / Math.max(1, r.width), y: (e.clientY - r.top) * cv.height / Math.max(1, r.height) };
+      }
+      function hitZone(px, py) {
+        var c = self.selClip();
+        if (!c || c.id !== self.cropModeId || !self._cropDraft) return null;
+        var W = cv.width, H = cv.height;
+        var fr = self.cropFrameRect(c, W, H);
+        if (!fr) return null;
+        var r = self._cropDraft;
+        var rx = fr.x + r.x * fr.sw * fr.s, ry = fr.y + r.y * fr.sh * fr.s;
+        var rw = r.w * fr.sw * fr.s, rh = r.h * fr.sh * fr.s;
+        var tol = Math.max(20, W * 0.04);
+        var corners = { tl: [rx, ry], tr: [rx + rw, ry], bl: [rx, ry + rh], br: [rx + rw, ry + rh] };
+        for (var k in corners) {
+          if (Math.abs(px - corners[k][0]) < tol && Math.abs(py - corners[k][1]) < tol) return { mode: 'resize', corner: k, fr: fr };
+        }
+        if (px >= rx && px <= rx + rw && py >= ry && py <= ry + rh) return { mode: 'move', fr: fr };
+        return null;
+      }
+      cv.addEventListener('pointerdown', function (e) {
+        if (!self.cropModeId) return;
+        var pt = toCanvas(e);
+        var z = hitZone(pt.x, pt.y);
+        if (!z) return;
+        try { cv.setPointerCapture(e.pointerId); } catch (e2) {}
+        self._cropDrag = { zone: z, pid: e.pointerId, lastX: pt.x, lastY: pt.y };
+        e.preventDefault(); e.stopPropagation();
+      });
+      cv.addEventListener('pointermove', function (e) {
+        var d = self._cropDrag;
+        if (!d || e.pointerId !== d.pid || !self._cropDraft) return;
+        var pt = toCanvas(e);
+        var L = window.EditorLogic;
+        var fr = d.zone.fr;
+        var dx = (pt.x - d.lastX) / (fr.sw * fr.s), dy = (pt.y - d.lastY) / (fr.sh * fr.s);
+        d.lastX = pt.x; d.lastY = pt.y;
+        if (d.zone.mode === 'resize') self._cropDraft = L.cropResize(self._cropDraft, d.zone.corner, dx, dy, self.project.aspect);
+        else self._cropDraft = L.cropMove(self._cropDraft, dx, dy);
+        self.drawOnce();
+        e.preventDefault();
+      });
+      function end(e) {
+        var d = self._cropDrag;
+        if (d && e.pointerId === d.pid) self._cropDrag = null;
+      }
+      cv.addEventListener('pointerup', end);
+      cv.addEventListener('pointercancel', end);
     },
     drawCover: function (g, src, W, H) {
       var s = Math.max(W / src.naturalWidth, H / src.naturalHeight);
@@ -879,7 +1053,64 @@
       kfs.splice(i, 0, kf);
       return kfs;
     },
-    clamp01: function (v) { v = +v; if (isNaN(v)) return 1; return Math.max(0, Math.min(1, v)); }
+    clamp01: function (v) { v = +v; if (isNaN(v)) return 1; return Math.max(0, Math.min(1, v)); },
+    /* ---- Phase 9: Crop + Reverse (pure, testable) ---- */
+    /* video element time for project time t within item starting at itemStart.
+       Reversed clips play from clip.out backward. Result clamped to [in,out]. */
+    clipVideoTime: function (clip, itemStart, t) {
+      var dt = (t - itemStart) * (clip.speed || 1);
+      var vt = clip.reversed ? (clip.out - dt) : ((clip.in || 0) + dt);
+      var lo = Math.min(clip.in || 0, clip.out), hi = Math.max(clip.in || 0, clip.out);
+      return Math.max(lo, Math.min(hi, vt));
+    },
+    /* project aspect string -> w/h ratio */
+    projAspectRatio: function (aspect) {
+      if (aspect === '16:9') return 16 / 9;
+      if (aspect === '1:1') return 1;
+      return 9 / 16;
+    },
+    /* largest centered rect with the given aspect inside the unit square */
+    cropFitAspect: function (aspect) {
+      var a = L.projAspectRatio(aspect);
+      var w, h;
+      if (a >= 1) { w = 1; h = 1 / a; } else { h = 1; w = a; }
+      return { x: (1 - w) / 2, y: (1 - h) / 2, w: w, h: h };
+    },
+    /* resize rect by dragging `corner` ('tl','tr','bl','br') by (dx,dy) in
+       fractions; keeps w/h = aspect, anchored at the opposite corner,
+       clamped inside the unit square. Returns a new rect. */
+    cropResize: function (r, corner, dx, dy, aspect) {
+      var a = L.projAspectRatio(aspect);
+      var ax = corner[1] === 'l' ? r.x + r.w : r.x;
+      var ay = corner[0] === 't' ? r.y + r.h : r.y;
+      var fx = (corner[1] === 'l' ? r.x : r.x + r.w) + dx;
+      var fy = (corner[0] === 't' ? r.y : r.y + r.h) + dy;
+      var nw = Math.abs(fx - ax), nh = Math.abs(fy - ay);
+      if (nw / a > nh) nh = nw / a; else nw = nh * a;
+      if (nw < 0.001 || nh < 0.001) return { x: r.x, y: r.y, w: r.w, h: r.h };
+      var maxW = corner[1] === 'l' ? ax : 1 - ax;
+      var maxH = corner[0] === 't' ? ay : 1 - ay;
+      var s = Math.min(maxW / nw, maxH / nh);
+      if (s < 1) { nw *= s; nh *= s; }
+      if (nw < 0.05 || nh < 0.05) return { x: r.x, y: r.y, w: r.w, h: r.h };
+      return {
+        x: corner[1] === 'l' ? ax - nw : ax,
+        y: corner[0] === 't' ? ay - nh : ay,
+        w: nw, h: nh
+      };
+    },
+    /* move rect by (dx,dy) fractions, clamped inside the unit square */
+    cropMove: function (r, dx, dy) {
+      return {
+        x: Math.max(0, Math.min(1 - r.w, r.x + dx)),
+        y: Math.max(0, Math.min(1 - r.h, r.y + dy)),
+        w: r.w, h: r.h
+      };
+    },
+    /* crop fractions -> source pixel rect {x,y,w,h} */
+    cropSrcRect: function (crop, sw, sh) {
+      return { x: crop.x * sw, y: crop.y * sh, w: crop.w * sw, h: crop.h * sh };
+    }
   };
   window.EditorLogic = L;
 })();
@@ -1008,6 +1239,8 @@
     var nc = Object.assign({}, c, { id: Store.uid('clip'), name: (c.name || 'clip') + ' (copy)' });
     // KEYFRAMES: deep copy so the two clips animate independently
     if (c.keyframes) nc.keyframes = c.keyframes.map(function (kf) { return Object.assign({}, kf); });
+    // Phase 9: deep copy crop so edits don't leak between copies
+    if (c.crop) nc.crop = { x: c.crop.x, y: c.crop.y, w: c.crop.w, h: c.crop.h };
     if (c.type === 'audio') {
       var buf = this.audioBufs.get(c.id);
       if (buf) this.audioBufs.set(nc.id, buf);
@@ -1191,7 +1424,8 @@
         blk.style.width = Math.round(gw) + 'px';
         blk.setAttribute('data-id', c.id);
         var badgeIc = c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '' : c.type === 'audio' ? '🎵' : '🖼';
-        blk.innerHTML = (badgeIc ? '<span class="cbadge">' + badgeIc + '</span>' : '') + self.thumbStripHTML(c, gw) +
+        blk.innerHTML = (badgeIc ? '<span class="cbadge">' + badgeIc + '</span>' : '') +
+          (c.reversed ? '<span class="cbadge rev">◀◀</span>' : '') + self.thumbStripHTML(c, gw) +
           (!c.url ? '<div class="relink">tap to re-link</div>' : '');
         if (self.trimModeId === c.id && c.url) {
           var hl = document.createElement('div'); hl.className = 'trim-handle l'; hl.title = 'Trim start';
@@ -1596,6 +1830,7 @@
       self.selClipId = c.id; self.selOvId = null; self.selTxId = null; self.selFxId = null;
       self._kfSel = null;
       if (self.trimModeId && self.trimModeId !== c.id) self.trimModeId = null;
+      if (self.cropModeId && self.cropModeId !== c.id) self.exitCropMode(); // discard crop draft
       self.setTool(null);
       self.renderTimeline();
       var tapT = self.timelineTimeFromClientX(ev.clientX != null ? ev.clientX : x0);
@@ -1752,6 +1987,8 @@
     if (!r) { toast('Move the playhead a bit inside the clip to split.'); return; }
     var a = Object.assign({}, c, { id: Store.uid('clip'), out: r.a.out, name: c.name });
     var b = Object.assign({}, c, { id: Store.uid('clip'), 'in': r.b['in'], transitionIn: 'none' });
+    // Phase 9: deep copy crop (Object.assign is shallow); reversed flag copies via assign
+    [a, b].forEach(function (x) { if (c.crop) x.crop = { x: c.crop.x, y: c.crop.y, w: c.crop.w, h: c.crop.h }; });
     var self = this;
     [a, b].forEach(function (x) { if (c.url) Store.mediaCache.set(x.id, c.url); x.url = c.url; });
     // KEYFRAMES: distribute by absolute time; add boundary keyframes at the
@@ -2143,6 +2380,7 @@
       return { x: cv.width / Math.max(1, r.width), y: cv.height / Math.max(1, r.height) };
     }
     cv.addEventListener('pointerdown', function (e) {
+      if (self.cropModeId) return; // Phase 9: crop mode owns canvas gestures
       var tg = self.kfTarget();
       if (!tg || self.placingSticker) return;
       try { cv.setPointerCapture(e.pointerId); } catch (e2) {}
@@ -2192,7 +2430,8 @@
   Editor.doUndo = function () {
     if (Store.undo()) {
       this.project = Store.current;
-      this.selClipId = null; this.trimModeId = null; this._kfSel = null; this.sizeCanvas(); this.syncMedia();
+      this.selClipId = null; this.trimModeId = null; this._kfSel = null; this.cropModeId = null; this._cropDraft = null;
+      this.sizeCanvas(); this.syncMedia();
       this.renderTimeline(); this.renderStickers(); this.drawOnce(); this.updateTransport(); this.renderPanel();
       document.getElementById('edName').textContent = this.project.name;
     }
@@ -2201,7 +2440,8 @@
   Editor.doRedo = function () {
     if (Store.redo()) {
       this.project = Store.current;
-      this.selClipId = null; this.trimModeId = null; this._kfSel = null; this.sizeCanvas(); this.syncMedia();
+      this.selClipId = null; this.trimModeId = null; this._kfSel = null; this.cropModeId = null; this._cropDraft = null;
+      this.sizeCanvas(); this.syncMedia();
       this.renderTimeline(); this.renderStickers(); this.drawOnce(); this.updateTransport(); this.renderPanel();
       document.getElementById('edName').textContent = this.project.name;
     }
