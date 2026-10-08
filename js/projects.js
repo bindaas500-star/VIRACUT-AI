@@ -3,6 +3,7 @@
   'use strict';
 
   function thumbFor(p) {
+    if (p.cover) return '<img src="' + p.cover + '">';
     if (p.clips && p.clips.length) {
       var c = p.clips[0];
       if (c.type === 'photo' && c.url && c.url.indexOf('blob:') !== 0) {

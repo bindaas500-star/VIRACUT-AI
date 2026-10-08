@@ -10,7 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="css/app.css?v=8">
+<link rel="stylesheet" href="css/app.css?v=9">
 </head>
 <body>
 <div id="app">
@@ -86,39 +86,73 @@
     <!-- SETTINGS -->
     <section class="screen" id="screen-settings"></section>
 
-    <!-- ============ EDITOR ============ -->
+    <!-- ============ EDITOR (Phase 2 layout) ============ -->
     <section class="screen" id="screen-editor">
-      <div class="ed-topbar">
-        <button class="icon-btn" id="edBack" title="Back">‹</button>
-        <div class="ed-title" id="edName" title="Tap to rename">Untitled</div>
-        <button class="icon-btn" id="edUndo" title="Undo">↩</button>
-        <button class="icon-btn" id="edRedo" title="Redo">↪</button>
-        <button class="btn primary sm" id="edExport">Export</button>
+      <!-- 1. TOP HEADER -->
+      <div class="ed2-header">
+        <button class="icon-btn" id="edBack" title="Back">✕</button>
+        <button class="icon-btn" id="edSearch" title="Search">🔍</button>
+        <div class="ed2-title" id="edName" title="Tap to rename">Untitled</div>
+        <button class="btn ghost sm" id="edAiUhd" title="AI features">✨ AI UHD</button>
+        <button class="btn primary" id="edExport">Export</button>
       </div>
 
+      <!-- 2. VIDEO PREVIEW -->
       <div class="ed-preview-wrap" id="edPreviewWrap">
         <canvas id="edCanvas"></canvas>
         <div id="edStickerLayer"></div>
-        <div class="ed-transport">
-          <button class="icon-btn big" id="edPlay">▶</button>
-          <span id="edTime">0.0s / 0.0s</span>
-          <input type="range" id="edSeek" min="0" max="1000" value="0">
-          <button class="icon-btn" id="edFull" title="Fullscreen preview">⛶</button>
+      </div>
+
+      <!-- 3. PLAYBACK CONTROLS -->
+      <div class="ed2-controls">
+        <button class="icon-btn" id="edFull" title="Fullscreen preview">⛶</button>
+        <button class="icon-btn big" id="edPlay">▶</button>
+        <span class="ed2-ur">
+          <button class="icon-btn" id="edUndo" title="Undo">↩</button>
+          <button class="icon-btn" id="edRedo" title="Redo">↪</button>
+        </span>
+      </div>
+
+      <!-- 4. TIME DISPLAY -->
+      <div class="ed2-time"><span id="edTime">00:00 / 00:00</span></div>
+
+      <!-- 5. VIDEO TIMELINE (scrolls under fixed center playhead) -->
+      <div class="ed2-tlscroll" id="edTlScroll">
+        <div class="ed2-tlinner" id="edTlInner">
+          <div class="ed2-markers" id="edMarkers"></div>
+          <div class="ed2-track ed2-track-video" id="edTimeline"></div>
         </div>
+        <div class="ed2-playhead" id="edPlayhead"></div>
       </div>
 
-      <div class="ed-tools" id="edTools"></div>
-      <div class="ed-panel" id="edPanel"><p class="hint">Pick a tool above, or import media to begin.</p></div>
-
-      <div class="ed-timeline-wrap">
-        <div class="ed-timeline-head"><span>Timeline</span>
-          <span class="tl-zoom"><button class="icon-btn sm" id="edZoomOut" title="Zoom out">−</button><button class="icon-btn sm" id="edZoomIn" title="Zoom in">＋</button></span>
-          <span id="edDur" class="muted"></span></div>
-        <div class="ed-timeline" id="edTimeline"></div>
+      <!-- 6. AUDIO LANE -->
+      <div class="ed2-lane">
+        <div class="ed2-lanehead"><span>🎵</span><button class="btn ghost xs" id="edAddAudio">+ Add audio</button></div>
+        <div class="ed2-lanetrack" id="edTrackAudio"></div>
       </div>
+
+      <!-- 7. TEXT LANE -->
+      <div class="ed2-lane">
+        <div class="ed2-lanehead"><span style="font-weight:700">T</span><button class="btn ghost xs" id="edAddText">+ Add text</button></div>
+        <div class="ed2-lanetrack" id="edTrackText"></div>
+      </div>
+
+      <!-- 8. OVERLAY LANES -->
+      <div id="edOverlayLanes"></div>
+      <div class="ed2-lanehead" style="margin:2px 2px 0"><span>🖼️</span><button class="btn ghost xs" id="edAddOvLane">+ Add overlay track</button></div>
+
+      <!-- 9. CLIP STRIP + TOOL PANEL -->
+      <div class="ed2-sheet">
+        <div class="ed2-clipstrip" id="edClipStrip" style="display:none"></div>
+        <div class="ed-panel" id="edPanel"><p class="hint">Pick a tool below, or import media to begin.</p></div>
+      </div>
+
+      <!-- 10. BOTTOM TOOLBAR -->
+      <div class="ed2-bottombar" id="edTools"></div>
 
       <input type="file" id="edFileInput" accept="video/*,image/*" multiple hidden>
       <input type="file" id="edMusicInput" accept="audio/*" hidden>
+      <input type="file" id="edOverlayInput" accept="video/*,image/*" hidden>
     </section>
 
     <!-- ============ AI VIDEO GENERATOR ============ -->
@@ -238,7 +272,7 @@
   <div id="toastRoot"></div>
 </div>
 
-<script src="js/store.js?v=5"></script>
+<script src="js/store.js?v=6"></script>
 <script src="js/plans.js?v=5"></script>
 <script src="js/auth-config.js?v=5"></script>
 <script src="js/auth.js?v=5"></script>
@@ -254,9 +288,9 @@
 <script src="js/photo.js?v=1"></script>
 <script src="js/photo-filters.js?v=1"></script>
 <script src="js/photo-ui.js?v=7"></script>
-<script src="js/editor.js?v=8"></script>
+<script src="js/editor.js?v=9"></script>
 <script src="js/ai-video.js?v=5"></script>
-<script src="js/projects.js?v=5"></script>
+<script src="js/projects.js?v=6"></script>
 <script src="js/templates.js?v=5"></script>
 <script src="js/tx-stats.js?v=5"></script>
 <script src="js/tx-data.js?v=5"></script>
@@ -267,7 +301,7 @@
 <script src="js/tx-flow2.js?v=10"></script>
 <script src="js/i18n.js?v=7"></script>
 <script src="js/settings.js?v=6"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/app.js?v=8"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

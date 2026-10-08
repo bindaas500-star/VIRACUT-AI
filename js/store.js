@@ -20,6 +20,9 @@
       texts: [],        // {id,text,position:'top'|'mid'|'bottom',color,size,start,end}
       stickers: [],     // {id,emoji,x,y,size}
       captions: [],     // {id,text,start,end}
+      overlays: [],     // {id,type:'photo'|'video',name,url,start,dur,x,y,scale,rotation,opacity,lane}
+      ovLaneCount: 1,   // overlay lanes (1..3)
+      cover: null,      // dataURL project cover
       filter: 'none',
       music: null,      // {name,url,volume,buffer?}
       voiceovers: [],   // {id,name,url,volume,buffer?}
