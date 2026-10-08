@@ -974,9 +974,9 @@
     { id: 'speed', ic: '⏩', label: 'Speed' },
     { id: 'volume', ic: '🔊', label: 'Volume' },
     { id: 'animation', ic: '✨', label: 'Animation', soon: true },
-    { id: 'crop', ic: '◫', label: 'Crop', soon: true },
+    { id: 'crop', ic: '◫', label: 'Crop' },
     { id: 'rotate', ic: '🔄', label: 'Rotate' },
-    { id: 'reverse', ic: '◀◀', label: 'Reverse', soon: true },
+    { id: 'reverse', ic: '◀◀', label: 'Reverse' },
     { id: 'freeze', ic: '❄️', label: 'Freeze' },
     { id: 'keyframe', ic: '◇', label: 'Keyframe' },
     { id: 'duplicate', ic: '⧉', label: 'Duplicate' },
@@ -990,15 +990,34 @@
     var el = document.getElementById('edClipStrip');
     var c = this.selClip();
     this.renderKfBtn();
+    // Phase 9: crop mode replaces the strip with Cancel/Apply
+    if (this.cropModeId && c && c.id === this.cropModeId) {
+      el.style.display = 'flex'; el.innerHTML = '';
+      var self = this;
+      var cancel = document.createElement('button');
+      cancel.className = 'cs-btn';
+      cancel.innerHTML = '<span class="ic">✕</span><span>Cancel</span>';
+      cancel.onclick = function () { self.cancelCrop(); };
+      var apply = document.createElement('button');
+      apply.className = 'cs-btn primary';
+      apply.innerHTML = '<span class="ic">✓</span><span>Apply crop</span>';
+      apply.onclick = function () { self.applyCrop(); };
+      var hint = document.createElement('span');
+      hint.className = 'cs-hint';
+      hint.textContent = 'Drag corners to resize · drag inside to move';
+      el.appendChild(cancel); el.appendChild(apply); el.appendChild(hint);
+      return;
+    }
     // tool panel takes priority over the strip
     if (!c || this.tool) { el.style.display = 'none'; el.innerHTML = ''; return; }
     var self = this;
     el.style.display = 'flex'; el.innerHTML = '';
     STRIP.forEach(function (s) {
       var b = document.createElement('button');
-      b.className = 'cs-btn' + (s.soon ? ' soon' : '');
+      b.className = 'cs-btn' + (s.soon ? ' soon' : '') + (s.id === 'reverse' && c.reversed ? ' on' : '');
       var label = s.label, ic = s.ic;
       if (s.id === 'mute') { label = c.muted ? 'Unmute' : 'Mute'; ic = c.muted ? '🔈' : '🔇'; }
+      if (s.id === 'reverse' && c.reversed) { label = 'Unreverse'; }
       b.innerHTML = '<span class="ic">' + ic + '</span><span>' + label + '</span>';
       b.onclick = function () { self.clipStripAction(s.id); };
       el.appendChild(b);
@@ -1020,14 +1039,18 @@
       case 'animation': toast('Clip animation is coming soon.', true); break;
       case 'delete': this.deleteClip(); break;
       case 'duplicate': this.duplicateClip(); break;
-      case 'crop': toast('Crop is coming soon.', true); break;
+      case 'crop': this.enterCropMode(); break;
       case 'rotate': this.setTool('rotate'); break;
       case 'flip':
         c.flipH = !c.flipH;
         this.snapshot(); Store.persist(); this.drawOnce(); this.renderTimeline();
         toast(c.flipH ? 'Flipped horizontally.' : 'Flip off.');
         break;
-      case 'reverse': toast('Reverse is coming soon.', true); break;
+      case 'reverse':
+        c.reversed = !c.reversed;
+        this.snapshot(); Store.persist(); this.drawOnce(); this.renderTimeline();
+        toast(c.reversed ? 'Clip reversed ◀◀' : 'Reverse off.');
+        break;
       case 'freeze': this.freezeFrame(); break;
       case 'keyframe': this.setTool('keyframe'); break;
       case 'adjust': this.setTool('adjust'); break;

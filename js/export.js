@@ -89,9 +89,15 @@
               if (isCur) {
                 var c = found.item.clip;
                 el.playbackRate = c.speed || 1;
-                if (el.paused) { var pr = el.play(); if (pr && pr.catch) pr.catch(function () {}); }
-                var exp = c.in + (t - found.item.start) * (c.speed || 1);
-                if (el.readyState >= 1 && Math.abs(el.currentTime - exp) > 0.4) el.currentTime = Math.min(exp, c.out - 0.05);
+                var exp = window.EditorLogic ? window.EditorLogic.clipVideoTime(c, found.item.start, t) : (c.in + (t - found.item.start) * (c.speed || 1));
+                if (c.reversed) {
+                  /* Phase 9: reversed clips are seek-driven in export too */
+                  if (!el.paused) el.pause();
+                  if (el.readyState >= 1 && Math.abs(el.currentTime - exp) > 0.12) el.currentTime = Math.min(exp, c.out - 0.05);
+                } else {
+                  if (el.paused) { var pr = el.play(); if (pr && pr.catch) pr.catch(function () {}); }
+                  if (el.readyState >= 1 && Math.abs(el.currentTime - exp) > 0.4) el.currentTime = Math.min(exp, c.out - 0.05);
+                }
               } else if (!el.paused) el.pause();
             } catch (e) {}
           });
