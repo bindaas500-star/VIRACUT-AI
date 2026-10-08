@@ -10,7 +10,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="stylesheet" href="css/app.css?v=9">
+<link rel="stylesheet" href="css/app.css?v=10">
 </head>
 <body>
 <div id="app">
@@ -116,39 +116,45 @@
       <!-- 4. TIME DISPLAY -->
       <div class="ed2-time"><span id="edTime">00:00 / 00:00</span></div>
 
-      <!-- 5. VIDEO TIMELINE (scrolls under fixed center playhead) -->
-      <div class="ed2-tlscroll" id="edTlScroll">
-        <div class="ed2-tlinner" id="edTlInner">
-          <div class="ed2-markers" id="edMarkers"></div>
-          <div class="ed2-track ed2-track-video" id="edTimeline"></div>
+      <!-- 5. UNIFIED TIMELINE (all lanes scroll together under one playhead) -->
+      <div class="tl-wrap" id="edTlWrap">
+        <div class="tl-scroll" id="edTlScroll">
+          <div class="tl-inner" id="edTlInner">
+            <div class="tl-ruler" id="edMarkers"></div>
+            <div class="tl-lane" data-lane="video">
+              <div class="tl-head" title="Video">🎞</div>
+              <div class="tl-track tl-track-video" id="edTrackVideo"></div>
+            </div>
+            <div class="tl-lane" data-lane="audio">
+              <div class="tl-head" title="Audio">♪</div>
+              <div class="tl-track" id="edTrackAudio"></div>
+            </div>
+            <div class="tl-lane" data-lane="text">
+              <div class="tl-head" title="Text">T</div>
+              <div class="tl-track" id="edTrackText"></div>
+            </div>
+            <div class="tl-lane" data-lane="overlay">
+              <div class="tl-head" title="Overlay">▣</div>
+              <div class="tl-track" id="edTrackOverlay"></div>
+            </div>
+          </div>
+          <div class="tl-playhead" id="edPlayhead"></div>
         </div>
-        <div class="ed2-playhead" id="edPlayhead"></div>
       </div>
 
-      <!-- 6. AUDIO LANE -->
-      <div class="ed2-lane">
-        <div class="ed2-lanehead"><span>🎵</span><button class="btn ghost xs" id="edAddAudio">+ Add audio</button></div>
-        <div class="ed2-lanetrack" id="edTrackAudio"></div>
+      <!-- 6. CLIP STRIP (appears on selection) -->
+      <div class="tl-clipstrip" id="edClipStrip" style="display:none"></div>
+
+      <!-- 7. BOTTOM SHEET for tool panels -->
+      <div class="tl-sheet-backdrop" id="edSheetBackdrop" style="display:none"></div>
+      <div class="tl-sheet" id="edSheet" style="display:none">
+        <div class="tl-sheet-grip" id="edSheetGrip"></div>
+        <button class="tl-sheet-x" id="edSheetX" title="Close">✕</button>
+        <div class="tl-sheet-body" id="edPanel"></div>
       </div>
 
-      <!-- 7. TEXT LANE -->
-      <div class="ed2-lane">
-        <div class="ed2-lanehead"><span style="font-weight:700">T</span><button class="btn ghost xs" id="edAddText">+ Add text</button></div>
-        <div class="ed2-lanetrack" id="edTrackText"></div>
-      </div>
-
-      <!-- 8. OVERLAY LANES -->
-      <div id="edOverlayLanes"></div>
-      <div class="ed2-lanehead" style="margin:2px 2px 0"><span>🖼️</span><button class="btn ghost xs" id="edAddOvLane">+ Add overlay track</button></div>
-
-      <!-- 9. CLIP STRIP + TOOL PANEL -->
-      <div class="ed2-sheet">
-        <div class="ed2-clipstrip" id="edClipStrip" style="display:none"></div>
-        <div class="ed-panel" id="edPanel"><p class="hint">Pick a tool below, or import media to begin.</p></div>
-      </div>
-
-      <!-- 10. BOTTOM TOOLBAR -->
-      <div class="ed2-bottombar" id="edTools"></div>
+      <!-- 8. BOTTOM TOOLBAR -->
+      <div class="tl-toolbar" id="edTools"></div>
 
       <input type="file" id="edFileInput" accept="video/*,image/*" multiple hidden>
       <input type="file" id="edMusicInput" accept="audio/*" hidden>
@@ -288,7 +294,7 @@
 <script src="js/photo.js?v=1"></script>
 <script src="js/photo-filters.js?v=1"></script>
 <script src="js/photo-ui.js?v=7"></script>
-<script src="js/editor.js?v=9"></script>
+<script src="js/editor.js?v=10"></script>
 <script src="js/ai-video.js?v=5"></script>
 <script src="js/projects.js?v=6"></script>
 <script src="js/templates.js?v=5"></script>
