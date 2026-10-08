@@ -94,11 +94,24 @@
       if (id === 'screen-projects' || id === 'screen-home') Projects.render();
       if (id === 'screen-profile') renderProfile();
       if (id === 'screen-photovideo' && window.PV) PV.startPreview();
+      // Back button on all non-home screens (editor has its own)
+      this.ensureBackBtn(id);
     },
     back: function () {
       var prev = this._hist.pop();
       if (prev && document.getElementById(prev)) this.show(prev);
       else this.show('screen-home');
+    },
+    ensureBackBtn: function (id) {
+      if (id === 'screen-home' || id === 'screen-editor') return;
+      var el = document.getElementById(id);
+      if (!el || el.querySelector(':scope > .vc-back')) return;
+      var b = document.createElement('button');
+      b.className = 'vc-back icon-btn';
+      b.innerHTML = '←';
+      b.setAttribute('aria-label', 'Back');
+      b.onclick = function () { window.App.back(); };
+      el.insertBefore(b, el.firstChild);
     },
     modal: modal, closeModal: closeModal, confirm: confirmDlg,
     refreshPlanBadge: function () {
