@@ -32,9 +32,14 @@
     open: function (id) {
       var p = Store.openProject(id);
       if (!p) { toast('Project not found.', true); return; }
+      // Phase 2 migrations
+      p.overlays = p.overlays || [];
+      p.ovLaneCount = Math.max(1, Math.min(3, p.ovLaneCount || 1));
       this.project = p;
       this.vidEls = new Map(); this.imgEls = new Map(); this.stills = new Map();
+      this.thumbStrips = new Map(); this.ovEls = new Map();
       this.t = 0; this.playing = false; this.selClipId = null; this.tool = null;
+      this.selOvId = null; this.selTxId = null;
       this.audioKept = null; this.placingSticker = null; this.selStickerId = null;
       this.staged = []; this.audioBufs = new Map(); this._tlBound = false;
       try { this.zoomPps = Math.max(8, Math.min(160, parseFloat(localStorage.getItem('viracut_tlzoom')) || 30)); } catch (e) { this.zoomPps = 30; }
@@ -43,7 +48,7 @@
       this.sizeCanvas();
       document.getElementById('edName').textContent = p.name;
       this.syncMedia(); this.bindTimeline();
-      this.renderTools(); this.setTool(null); this.renderTimeline(); this.renderStickers(); this.updateUndoRedo();
+      this.renderTools(); this.setTool(null); this.renderTimeline(); this.renderLanes(); this.renderClipStrip(); this.renderStickers(); this.updateUndoRedo();
       this.updateTransport();
       App.show('screen-editor');
       this.drawOnce();
@@ -77,9 +82,24 @@
           im.src = c.url; self.imgEls.set(c.id, im);
         }
       });
+      // overlays
+      var ovSeen = {};
+      (this.project.overlays || []).forEach(function (ov) {
+        ovSeen[ov.id] = true;
+        if (!ov.url || self.ovEls.has(ov.id)) return;
+        if (ov.type === 'video') {
+          var v = document.createElement('video');
+          v.src = ov.url; v.preload = 'auto'; v.playsInline = true; v.muted = true; v.loop = true;
+          self.ovEls.set(ov.id, v);
+        } else {
+          var im2 = new Image(); im2.src = ov.url;
+          self.ovEls.set(ov.id, im2);
+        }
+      });
       // drop stale
       this.vidEls.forEach(function (el, id) { if (!seen[id]) { try { el.pause(); } catch (e) {} self.vidEls.delete(id); } });
       this.imgEls.forEach(function (im, id) { if (!seen[id]) self.imgEls.delete(id); });
+      this.ovEls.forEach(function (el, id) { if (!ovSeen[id]) { try { el.pause && el.pause(); } catch (e) {} self.ovEls.delete(id); } });
     },
     makeVideoEl: function (clip) {
       var self = this;
@@ -189,6 +209,19 @@
         } catch (e) {}
       });
       this.applyClipAudioGain(this.t);
+      // overlay videos: play only while active on timeline
+      var L2 = window.EditorLogic, tt = this.t;
+      this.ovEls.forEach(function (el, id) {
+        if (!el.play) return;
+        var ov = null;
+        var ovs = self.project.overlays || [];
+        for (var i = 0; i < ovs.length; i++) if (ovs[i].id === id) ov = ovs[i];
+        var active = ov && L2.ovActive(ov, tt);
+        try {
+          if (active) { if (el.paused) { var pr = el.play(); if (pr && pr.catch) pr.catch(function () {}); } }
+          else if (!el.paused) el.pause();
+        } catch (e) {}
+      });
     },
     /* per-clip volume + fade in/out + mute, applied to the current clip's gain node */
     applyClipAudioGain: function (t) {
@@ -244,18 +277,11 @@
     },
     updateTransport: function () {
       var total = Store.timing().total;
-      document.getElementById('edTime').textContent = this.t.toFixed(1) + 's / ' + total.toFixed(1) + 's';
-      document.getElementById('edDur').textContent = total.toFixed(1) + 's total';
-      if (!this._seeking) document.getElementById('edSeek').value = total ? Math.round(this.t / total * 1000) : 0;
-      // timeline playhead
-      var ph = document.getElementById('edPlayhead');
-      if (ph) {
-        var items = this._tlGeom || [];
-        if (items.length && window.EditorLogic) {
-          ph.style.display = 'block';
-          ph.style.left = Math.round(EditorLogic.playheadX(items, this.t)) + 'px';
-        } else ph.style.display = 'none';
-      }
+      var L = window.EditorLogic;
+      var te = document.getElementById('edTime');
+      if (te) te.textContent = L.fmtTime(this.t) + ' / ' + L.fmtTime(total);
+      // keep fixed center playhead on current time
+      if (this.playing) this.centerPlayhead();
     },
 
     /* ================= compositor ================= */
@@ -329,7 +355,42 @@
           g.restore();
         });
       }
+      // overlays (photo/video picture-in-picture)
+      self.drawOverlays(g, W, H, t);
       g.restore();
+    },
+    drawOverlays: function (g, W, H, t) {
+      var self = this, p = this.project;
+      if (!p || !p.overlays || !p.overlays.length) return;
+      var L = window.EditorLogic;
+      p.overlays.forEach(function (ov) {
+        if (!L.ovActive(ov, t)) return;
+        var media = null;
+        if (ov.type === 'video') media = self.ovEls.get(ov.id);
+        else media = self.ovEls.get(ov.id);
+        if (!media) return;
+        var mw, mh;
+        if (ov.type === 'video') {
+          if (!media.videoWidth || media.readyState < 2) return;
+          mw = media.videoWidth; mh = media.videoHeight;
+        } else {
+          if (!media.complete || !media.naturalWidth) return;
+          mw = media.naturalWidth; mh = media.naturalHeight;
+        }
+        g.save();
+        g.globalAlpha = Math.max(0, Math.min(1, ov.opacity == null ? 1 : ov.opacity));
+        g.translate(ov.x * W, ov.y * H);
+        if (ov.rotation) g.rotate(ov.rotation * Math.PI / 180);
+        var s = (ov.scale || 0.4) * W / mw;
+        var dw = mw * s, dh = mh * s;
+        // cover-fit into a 16:9-ish box? No — draw natural aspect
+        try { g.drawImage(media, -dw / 2, -dh / 2, dw, dh); } catch (e) {}
+        if (self.selOvId === ov.id) {
+          g.strokeStyle = '#8B5CF6'; g.lineWidth = 3;
+          g.strokeRect(-dw / 2, -dh / 2, dw, dh);
+        }
+        g.restore();
+      });
     },
     drawClipFX: function (g, item, W, H, t) {
       // Smart FX wrapper: pre-transforms, pixel post-processing, overlays.
@@ -358,7 +419,9 @@
     drawClipMedia: function (g, clip, item, W, H, t, alpha) {
       g.save();
       g.globalAlpha = alpha == null ? 1 : alpha;
-      g.filter = FILTERS[this.project.filter] || 'none';
+      var pf = FILTERS[this.project.filter] || 'none';
+      var af = this.adjustFilter ? this.adjustFilter(clip) : '';
+      g.filter = (af ? af + ' ' : '') + pf;
       var rot = ((clip.rotation || 0) % 360 + 360) % 360;
       g.translate(W / 2, H / 2);
       if (rot) g.rotate(rot * Math.PI / 180);
@@ -506,6 +569,61 @@
         }
       }
       return 0;
+    },
+    /* ---- Phase 2 helpers ---- */
+    /* seconds -> "MM:SS" */
+    fmtTime: function (s) {
+      s = Math.max(0, s || 0);
+      var m = Math.floor(s / 60), ss = Math.floor(s % 60);
+      return (m < 10 ? '0' + m : '' + m) + ':' + (ss < 10 ? '0' + ss : '' + ss);
+    },
+    /* nice time-marker step (seconds) so labels are >= ~70px apart */
+    markerStep: function (pps) {
+      var steps = [1, 2, 5, 10, 15, 30, 60];
+      for (var i = 0; i < steps.length; i++) if (steps[i] * pps >= 70) return steps[i];
+      return 60;
+    },
+    /* how many thumbnails to generate for a clip block of width w px */
+    thumbCount: function (w) {
+      return Math.max(2, Math.min(6, Math.round(w / 64)));
+    },
+    /* pure trim math: returns {in,out} after dragging `which` handle by dt seconds */
+    trimApply: function (clip, which, dt) {
+      var nin = clip.in, nout = clip.out;
+      if (which === 'l') nin = Math.max(0, Math.min(clip.out - 0.1, clip.in + dt));
+      else nout = Math.max(clip.in + 0.1, clip.out + dt);
+      if (clip.type === 'video' && clip.duration) {
+        nin = Math.max(0, nin); nout = Math.min(clip.duration, nout);
+        if (nout - nin < 0.1) { if (which === 'l') nin = nout - 0.1; else nout = nin + 0.1; }
+      }
+      return { 'in': +nin.toFixed(2), out: +nout.toFixed(2) };
+    },
+    /* lane block geometry: x/width in px for a block at startT with durT */
+    laneGeom: function (startT, durT, pps) {
+      return { x: Math.round(startT * pps), w: Math.max(28, Math.round(durT * pps)) };
+    },
+    /* is overlay visible at project time t? */
+    ovActive: function (ov, t) { return t >= ov.start && t < ov.start + ov.dur; },
+    /* project time from scroll position (center-playhead model).
+       scrollLeft includes padL left padding. */
+    timeFromScroll: function (scrollLeft, viewW, pps, total, padL) {
+      var t = (scrollLeft - (padL || 0) + viewW / 2) / Math.max(1, pps);
+      return Math.max(0, Math.min(total, t));
+    },
+    /* scrollLeft needed to center project time t */
+    scrollForTime: function (t, viewW, pps) {
+      return Math.max(0, t * pps - viewW / 2);
+    },
+    /* waveform peaks: n values 0..1 from Float32Array channel data */
+    wavePeaks: function (data, n) {
+      var out = [], len = data.length || 1;
+      for (var i = 0; i < n; i++) {
+        var s = Math.floor(i * len / n), e = Math.floor((i + 1) * len / n);
+        var m = 0;
+        for (var j = s; j < e; j += 4) { var v = Math.abs(data[j] || 0); if (v > m) m = v; }
+        out.push(Math.max(0, Math.min(1, m)));
+      }
+      return out;
     }
   };
   window.EditorLogic = L;
@@ -733,53 +851,171 @@
     this.snapshot(); Store.persist(); this.renderTimeline(); this.drawOnce(); this.updateTransport();
   };
 
+  /* ================= Phase 2 timeline: absolute time-positioned tracks + fixed center playhead ================= */
+  Editor.tlPad = function () {
+    var sc = document.getElementById('edTlScroll');
+    var vw = sc ? sc.clientWidth || 320 : 320;
+    return vw / 2;
+  };
   Editor.renderTimeline = function () {
-    var self = this, el = document.getElementById('edTimeline');
+    var self = this;
+    var track = document.getElementById('edTimeline');
+    var inner = document.getElementById('edTlInner');
+    var markers = document.getElementById('edMarkers');
     var p = this.project;
-    el.innerHTML = '';
+    track.innerHTML = ''; markers.innerHTML = '';
     this._tlGeom = [];
+    var pps = this.zoomPps, pad = this.tlPad();
+    this._padL = pad;
+    var L = window.EditorLogic;
     if (!p || !p.clips.length) {
-      el.innerHTML = '<div class="empty" style="min-width:100%">No clips yet — use Media to import.</div>';
+      track.innerHTML = '<div class="ed2-laneempty">No clips yet — use Media to import.</div>';
+      inner.style.width = '100%';
+      self.renderLanes(); self.renderClipStrip();
       return;
     }
-    var tm = Store.timing(), x = 0;
+    var tm = Store.timing(), total = tm.total;
+    // time markers
+    var step = L.markerStep(pps);
+    var mhtml = '';
+    for (var mt = 0; mt <= total + 0.01; mt += step) {
+      mhtml += '<span class="ed2-marker" style="left:' + Math.round(pad + mt * pps) + 'px">' + L.fmtTime(mt) + '</span>';
+    }
+    markers.innerHTML = mhtml;
+    markers.style.width = Math.round(pad * 2 + total * pps) + 'px';
+    // clip blocks (absolute, time-positioned)
     p.clips.forEach(function (c, i) {
+      var it = tm.items[i]; if (!it) return;
       var playDur = Store.clipPlayDur(c);
-      var w = Math.max(48, Math.round(playDur * self.zoomPps));
-      self._tlGeom.push({ start: tm.items[i] ? tm.items[i].start : 0, end: tm.items[i] ? tm.items[i].end : 0, x: x, w: w });
-      x += w + 8; // card + gap
+      var gx = pad + it.start * pps, gw = Math.max(40, Math.round(playDur * pps));
+      self._tlGeom.push({ start: it.start, end: it.end, x: gx, w: gw });
       var card = document.createElement('div');
-      card.className = 'clip-card' + (self.selClipId === c.id ? ' sel' : '');
-      card.style.flex = '0 0 ' + w + 'px';
+      card.className = 'clip-block' + (self.selClipId === c.id ? ' sel' : '');
+      card.style.left = Math.round(gx) + 'px';
+      card.style.width = Math.round(gw) + 'px';
       card.setAttribute('data-id', c.id);
-      var dur = playDur.toFixed(1) + 's';
-      var thumb;
-      if (!c.url) thumb = '<div class="thumb"></div>';
-      else if (c.type === 'video') {
-        var st = self.stills.get(c.id);
-        thumb = st ? '<div class="thumb"><img src="' + st + '"></div>'
-          : '<div class="thumb"><video src="' + c.url + '" muted preload="metadata" playsinline></video></div>';
-      } else if (c.type === 'audio') {
-        thumb = '<div class="thumb" style="font-size:26px">🎵</div>';
-      } else thumb = '<div class="thumb"><img src="' + c.url + '"></div>';
       var badgeIc = c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '🎞' : c.type === 'audio' ? '🎵' : '🖼';
-      card.innerHTML = '<span class="badge">' + badgeIc + ' ' + (i + 1) + '</span>' + thumb +
-        '<div class="meta">' + esc(c.name) + ' · ' + dur + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.transitionIn === 'crossfade' ? ' · ⋈' : '') + (c.fx ? ' · ✨' : '') +
-        ((c.flipH || c.flipV) ? ' · ⇄' : '') + (c.volume != null && c.volume !== 1 && c.type !== 'photo' ? ' · 🔊' + Math.round(c.volume * 100) + '%' : '') + '</div>' +
-        (!c.url ? '<div class="relink">' + (c.type === 'placeholder' ? '🎭 Tap to add your clip' : 'Media missing<br>(tap to re-link)') + '</div>' : '');
+      var thumbs = self.thumbStripHTML(c, gw);
+      card.innerHTML = '<span class="cbadge">' + badgeIc + '</span>' + thumbs +
+        '<div class="cmeta">' + esc(c.name) + ' · ' + playDur.toFixed(1) + 's' + (c.speed !== 1 ? ' · ' + c.speed + 'x' : '') + (c.muted ? ' · 🔇' : '') + '</div>' +
+        (!c.url ? '<div class="relink">tap to re-link</div>' : '');
+      if (self.selClipId === c.id && c.url) {
+        var hl = document.createElement('div'); hl.className = 'trim-handle l'; hl.title = 'Trim start';
+        var hr = document.createElement('div'); hr.className = 'trim-handle r'; hr.title = 'Trim end';
+        hl.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, card, 'l'); });
+        hr.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, card, 'r'); });
+        card.appendChild(hl); card.appendChild(hr);
+      }
       card.addEventListener('pointerdown', function (e) { self.onCardDown(e, c, card, i); });
-      el.appendChild(card);
+      track.appendChild(card);
+      if (c.type === 'video' && c.url && !self.thumbStrips.get(c.id)) self.captureThumbStrip(c, gw);
     });
-    // playhead + drop indicator live inside the scrollable timeline
-    var ph = document.createElement('div'); ph.id = 'edPlayhead'; el.appendChild(ph);
-    var dl = document.createElement('div'); dl.id = 'edDropLine'; el.appendChild(dl);
+    // "+" add button at end of track
+    var add = document.createElement('div');
+    add.className = 'ed2-addclip';
+    add.style.left = Math.round(pad + total * pps + 8) + 'px';
+    add.textContent = '＋'; add.title = 'Add media';
+    add.addEventListener('click', function () { self.setTool('media'); });
+    track.appendChild(add);
+    inner.style.width = Math.round(pad * 2 + total * pps + 90) + 'px';
+    self.renderLanes();
+    self.renderClipStrip();
+    self.centerPlayhead();
     function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  };
+
+  /* thumbnail strip: N frames across the clip via offscreen video (session cache) */
+  Editor.thumbStripHTML = function (c, w) {
+    var n = window.EditorLogic.thumbCount(w);
+    var arr = this.thumbStrips.get(c.id);
+    var h = '<div class="thumbs">';
+    if (c.type === 'video' && arr && arr.length) {
+      for (var i = 0; i < arr.length; i++) h += '<img src="' + arr[i] + '" alt="">';
+    } else if (c.type === 'video') {
+      var st = this.stills.get(c.id);
+      h += st ? '<img src="' + st + '" style="width:100%" alt="">' : '<div class="cmeta" style="padding:14px 6px">…</div>';
+    } else if (c.type === 'audio') {
+      h += '<div class="cmeta" style="padding:12px 6px;font-size:20px">🎵</div>';
+    } else if (c.url) {
+      h += '<img src="' + c.url + '" style="width:100%" alt="">';
+    }
+    return h + '</div>';
+  };
+  Editor.captureThumbStrip = function (c, w) {
+    var self = this;
+    if (this.thumbStrips.get(c.id) === null) return;
+    this.thumbStrips.set(c.id, null);
+    try {
+      var v = document.createElement('video');
+      v.muted = true; v.preload = 'auto'; v.playsInline = true;
+      v.src = c.url;
+      var n = window.EditorLogic.thumbCount(w || 200);
+      var out = [], k = 0, done = false;
+      var span = Math.max(0.2, (c.out || 1) - (c.in || 0));
+      function finish() {
+        if (done) return; done = true;
+        if (out.length) { self.thumbStrips.set(c.id, out); self.renderTimeline(); }
+        else self.thumbStrips.delete(c.id);
+      }
+      v.addEventListener('loadedmetadata', function () { step(); });
+      v.addEventListener('error', function () { self.thumbStrips.delete(c.id); });
+      setTimeout(finish, 15000);
+      function step() {
+        if (done) return;
+        if (k >= n) { finish(); return; }
+        var tt = (c.in || 0) + span * (n === 1 ? 0.5 : k / (n - 1));
+        var onSeek = function () {
+          v.removeEventListener('seeked', onSeek);
+          try {
+            var cv = document.createElement('canvas'); cv.width = 96; cv.height = 54;
+            cv.getContext('2d').drawImage(v, 0, 0, 96, 54);
+            out.push(cv.toDataURL('image/jpeg', 0.55));
+          } catch (e) {}
+          k++; step();
+        };
+        v.addEventListener('seeked', onSeek);
+        try { v.currentTime = Math.max(0, Math.min(tt, (v.duration || tt + 1) - 0.05)); }
+        catch (e) { v.removeEventListener('seeked', onSeek); k++; step(); }
+      }
+    } catch (e) { this.thumbStrips.delete(c.id); }
+  };
+
+  /* trim handles: drag left/right edge to adjust in/out */
+  Editor.onTrimHandle = function (e, c, card, which) {
+    var self = this, L = window.EditorLogic;
+    e.preventDefault();
+    var x0 = e.clientX, pps = this.zoomPps;
+    var origIn = c.in, origOut = c.out;
+    function onMove(ev) {
+      var dt = (ev.clientX - x0) / pps;
+      var r = L.trimApply({ 'in': origIn, out: origOut, type: c.type, duration: c.duration }, which, dt);
+      c.in = r['in']; c.out = r.out;
+      var tm = Store.timing(), it = null;
+      for (var i = 0; i < tm.items.length; i++) if (tm.items[i].clip.id === c.id) it = tm.items[i];
+      if (it) {
+        card.style.left = Math.round((self._padL || 0) + it.start * pps) + 'px';
+        card.style.width = Math.max(40, Math.round(Store.clipPlayDur(c) * pps)) + 'px';
+      }
+      self.drawOnce();
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      self.snapshot(); Store.persist();
+      self.renderTimeline(); self.drawOnce(); self.updateTransport();
+      if (self.tool === 'trim') self.renderPanel();
+    }
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   /* long-press to drag a clip card and reorder; plain tap selects */
   Editor.onCardDown = function (e, c, card, idx) {
     var self = this;
     if (e.button != null && e.button !== 0) return;
+    if (e.target.closest && e.target.closest('.trim-handle')) return;
     var x0 = e.clientX, moved = false, dragging = false, timer = null;
     function clear() {
       if (timer) { clearTimeout(timer); timer = null; }
@@ -790,10 +1026,9 @@
     function onMove(ev) {
       var dx = ev.clientX - x0;
       if (!dragging) {
-        if (Math.abs(dx) > 12) { moved = true; clear(); return; } // it's a scroll — bail
+        if (Math.abs(dx) > 12) { moved = true; clear(); return; }
         return;
       }
-      // dragging: block page scroll on touch, move the card
       ev.preventDefault();
       card.style.transform = 'translateX(' + dx + 'px)';
       card.style.zIndex = '10';
@@ -804,31 +1039,22 @@
         if (cx < geom[i].x + geom[i].w / 2) { to = i; break; }
         to = i;
       }
-      var dl = document.getElementById('edDropLine');
-      if (dl) {
-        var gx = to <= idx ? geom[to].x - 4 : geom[to].x + geom[to].w + 4;
-        dl.style.display = 'block'; dl.style.left = gx + 'px';
-      }
       card._dropTo = to;
     }
     function onUp(ev) {
       clear();
       card.style.transform = ''; card.style.zIndex = '';
-      card.classList.remove('dragging');
-      var dl = document.getElementById('edDropLine');
-      if (dl) dl.style.display = 'none';
       if (dragging) {
         var to = card._dropTo != null ? card._dropTo : idx;
         card._dropTo = null;
         if (to !== idx) self.moveClipTo(idx, to);
         return;
       }
-      if (moved) return; // was a scroll
-      // tap = select (or re-link)
+      if (moved) return;
       if (!c.url) { self.relinkClip(c.id); return; }
-      self.selClipId = c.id;
-      self.renderTimeline();
-      if (self.tool === 'trim' || self.tool === 'speed' || self.tool === 'rotate' || self.tool === 'transition' || self.tool === 'fx' || self.tool === 'audio') self.renderPanel();
+      self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
+      self.setTool(null);
+      self.renderTimeline(); self.drawOnce();
     }
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
@@ -837,32 +1063,92 @@
       timer = null;
       if (moved) return;
       dragging = true;
-      card.classList.add('dragging');
       try { if (navigator.vibrate) navigator.vibrate(25); } catch (e2) {}
     }, 450);
   };
 
-  /* bind once: playhead div is re-created in renderTimeline; seek-scrub on background */
+  /* center the fixed playhead on current time */
+  Editor.centerPlayhead = function () {
+    var sc = document.getElementById('edTlScroll');
+    if (!sc) return;
+    var L = window.EditorLogic;
+    this._progScroll = true;
+    try { sc.scrollLeft = Math.max(0, L.scrollForTime(this.t, sc.clientWidth || 320, this.zoomPps) + (this._padL || 0)); } catch (e) {}
+    var self = this;
+    setTimeout(function () { self._progScroll = false; }, 80);
+  };
+
+  /* bind once: scrub, playhead drag, pinch zoom, manual-scroll seek */
   Editor.bindTimeline = function () {
     if (this._tlBound) return;
     this._tlBound = true;
-    var self = this;
-    var el = document.getElementById('edTimeline');
+    var self = this, L = window.EditorLogic;
+    var sc = document.getElementById('edTlScroll');
+    var inner = document.getElementById('edTlInner');
+    var ph = document.getElementById('edPlayhead');
     var scrubbing = false;
-    function seekEv(e) {
-      var total = Store.timing().total;
-      if (!total) return;
-      var r = el.getBoundingClientRect();
-      var px = e.clientX - r.left + el.scrollLeft;
-      var w = Math.max(1, el.scrollWidth);
-      self.seek(total * Math.max(0, Math.min(1, px / w)));
+    function seekFromClientX(cx) {
+      var total = Store.timing().total; if (!total) return;
+      var r = sc.getBoundingClientRect();
+      var t = ((sc.scrollLeft + (cx - r.left) - (self._padL || 0)) / self.zoomPps);
+      self.seek(Math.max(0, Math.min(total, t)));
     }
-    el.addEventListener('pointerdown', function (e) {
-      if (e.target.closest && e.target.closest('.clip-card')) return; // card handles itself
-      scrubbing = true; self._seeking = true; seekEv(e);
+    inner.addEventListener('pointerdown', function (e) {
+      if (e.target.closest && e.target.closest('.clip-block')) return;
+      scrubbing = true; self._seeking = true; seekFromClientX(e.clientX);
     });
-    window.addEventListener('pointermove', function (e) { if (scrubbing) seekEv(e); });
-    window.addEventListener('pointerup', function () { if (scrubbing) { scrubbing = false; self._seeking = false; } });
+    window.addEventListener('pointermove', function (e) { if (scrubbing) seekFromClientX(e.clientX); });
+    window.addEventListener('pointerup', function () { if (scrubbing) { scrubbing = false; self._seeking = false; self.centerPlayhead(); } });
+    // drag the playhead itself = move timeline under it
+    var phDrag = null;
+    ph.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      phDrag = e.clientX;
+      if (self.playing) self.pause();
+    });
+    window.addEventListener('pointermove', function (e) {
+      if (phDrag == null) return;
+      var dx = e.clientX - phDrag; phDrag = e.clientX;
+      self._progScroll = true;
+      sc.scrollLeft -= dx;
+      var total = Store.timing().total;
+      if (total) self.seek(L.timeFromScroll(sc.scrollLeft, sc.clientWidth || 320, self.zoomPps, total, self._padL || 0));
+      self._progScroll = false;
+    });
+    window.addEventListener('pointerup', function () { phDrag = null; });
+    // manual scroll (not programmatic) = scrub to center; pause if playing
+    var scrollT = null;
+    sc.addEventListener('scroll', function () {
+      if (self._progScroll) return;
+      if (scrollT) clearTimeout(scrollT);
+      scrollT = setTimeout(function () {
+        if (self.playing) self.pause();
+        var total = Store.timing().total; if (!total) return;
+        var t = L.timeFromScroll(sc.scrollLeft, sc.clientWidth || 320, self.zoomPps, total, self._padL || 0);
+        self.seek(t);
+      }, 90);
+    }, { passive: true });
+    // pinch to zoom
+    var pinchD = 0;
+    sc.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) pinchD = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    }, { passive: true });
+    sc.addEventListener('touchmove', function (e) {
+      if (e.touches.length === 2 && pinchD > 0) {
+        var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        var nz = Math.max(8, Math.min(160, self.zoomPps * d / pinchD));
+        pinchD = d;
+        if (Math.abs(nz - self.zoomPps) > 1) {
+          self.zoomPps = Math.round(nz);
+          try { localStorage.setItem('viracut_tlzoom', String(self.zoomPps)); } catch (e2) {}
+          self.renderTimeline(); self.updateTransport();
+        }
+      }
+    }, { passive: true });
+    // lane buttons
+    document.getElementById('edAddAudio').onclick = function () { self.setTool('audio'); };
+    document.getElementById('edAddText').onclick = function () { self.textDialog(); };
+    document.getElementById('edAddOvLane').onclick = function () { self.addOverlayLane(); };
   };
 
   Editor.selClip = function () { return this.selClipId ? this.findClip(this.selClipId) : null; };
@@ -956,12 +1242,12 @@
   var Editor = window.Editor;
 
   var TOOLS = [
-    { id: 'media', label: '📥 Media' }, { id: 'trim', label: '✂️ Trim' },
-    { id: 'split', label: '🔪 Split' }, { id: 'speed', label: '⏩ Speed' },
-    { id: 'rotate', label: '🔄 Rotate' }, { id: 'filter', label: '🎨 Filter' },
-    { id: 'transition', label: '⋈ Trans.' }, { id: 'fx', label: '✨ FX' }, { id: 'text', label: '🔤 Text' },
-    { id: 'sticker', label: '😀 Sticker' }, { id: 'captions', label: '💬 Captions' },
-    { id: 'audio', label: '🎵 Audio' }
+    { id: 'edit', label: '✂️ Edit' }, { id: 'audio', label: '🎵 Audio' },
+    { id: 'text', label: '🔤 Text' }, { id: 'fx', label: '✨ Effects' },
+    { id: 'overlay', label: '🖼️ Overlay' }, { id: 'captions', label: '💬 Captions' },
+    { id: 'filter', label: '🎨 Filters' }, { id: 'adjust', label: '🎚️ Adjust' },
+    { id: 'transition', label: '⋈ Transitions' }, { id: 'sticker', label: '😀 Stickers' },
+    { id: 'ai', label: '🤖 AI' }
   ];
 
   Editor.renderTools = function () {
@@ -969,19 +1255,37 @@
     el.innerHTML = '';
     TOOLS.forEach(function (t) {
       var b = document.createElement('button');
-      b.className = 'tool-btn' + (self.tool === t.id ? ' on' : '');
-      b.textContent = t.label;
-      b.onclick = function () {
-        if (t.id === 'split') { self.splitAtPlayhead(); return; }
-        self.setTool(self.tool === t.id ? null : t.id);
-      };
+      b.className = 'tb-btn' + (self.tool === t.id ? ' on' : '');
+      var parts = t.label.split(' ');
+      b.innerHTML = '<span class="ic">' + parts[0] + '</span><span>' + parts.slice(1).join(' ') + '</span>';
+      b.onclick = function () { self.onToolTap(t.id); };
       el.appendChild(b);
     });
+  };
+  Editor.onToolTap = function (id) {
+    if (id === 'edit') {
+      var c = this.selClip();
+      if (!c) {
+        // select clip under playhead if any
+        var found = Store.clipAt(this.t);
+        if (found && found.item.clip.url) {
+          this.selClipId = found.item.clip.id;
+          this.renderTimeline(); this.drawOnce();
+          toast('Clip selected — edit actions above.');
+        } else toast('Select a clip in the timeline first.', true);
+        return;
+      }
+      this.setTool(null); // strip is already visible
+      var strip = document.getElementById('edClipStrip');
+      if (strip) strip.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      return;
+    }
+    this.setTool(this.tool === id ? null : id);
   };
   Editor.setTool = function (id) {
     this.tool = id; this.placingSticker = null;
     document.getElementById('edStickerLayer').style.pointerEvents = 'none';
-    this.renderTools(); this.renderPanel();
+    this.renderTools(); this.renderPanel(); this.renderClipStrip();
   };
 
   Editor.renderPanel = function () {
@@ -1441,5 +1745,444 @@
         });
       };
     }
+  };
+})();
+
+/* ViraCut AI — editor.js (4/4): Phase 2 lanes, clip strip, adjust/AI/overlay panels, cover, freeze */
+(function () {
+  'use strict';
+  var Editor = window.Editor;
+  var L = window.EditorLogic;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+  /* ================= LANES ================= */
+  Editor.renderLanes = function () {
+    this.renderAudioLane(); this.renderTextLane(); this.renderOverlayLanes();
+  };
+
+  Editor.renderAudioLane = function () {
+    var self = this, el = document.getElementById('edTrackAudio');
+    var p = this.project; el.innerHTML = '';
+    var pps = this.zoomPps, pad = this._padL || 0;
+    var tm = Store.timing(), total = tm.total;
+    function block(x, w, inner, sel, cb) {
+      var d = document.createElement('div');
+      d.className = 'au-block' + (sel ? ' sel' : '');
+      d.style.left = Math.round(x) + 'px'; d.style.width = Math.max(28, Math.round(w)) + 'px';
+      d.innerHTML = inner;
+      d.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+      d.addEventListener('click', cb);
+      el.appendChild(d);
+      return d;
+    }
+    if (p.music) {
+      var g = L.laneGeom(0, total, pps);
+      block(pad + g.x, g.w, '🎵 ' + esc(p.music.name || 'Music'), false, function () {
+        self.setTool('audio');
+      });
+    }
+    tm.items.forEach(function (item) {
+      var c = item.clip;
+      if (c.type !== 'audio') return;
+      var g = L.laneGeom(item.start, item.end - item.start, pps);
+      var d = block(pad + g.x, g.w, '', self.selClipId === c.id, function () {
+        self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
+        self.setTool(null); self.renderTimeline(); self.drawOnce();
+      });
+      // waveform from decoded buffer, else solid icon
+      var buf = self.audioBufs.get(c.id);
+      if (buf) {
+        try {
+          var cv = document.createElement('canvas');
+          var peaks = L.wavePeaks(buf.getChannelData(0), 48);
+          cv.width = 96; cv.height = 28;
+          var ctx2 = cv.getContext('2d');
+          ctx2.fillStyle = '#a78bfa';
+          for (var i = 0; i < peaks.length; i++) {
+            var bh = Math.max(2, peaks[i] * 26);
+            ctx2.fillRect(i * 2, 14 - bh / 2, 1.4, bh);
+          }
+          d.insertBefore(cv, d.firstChild);
+        } catch (e) {}
+      }
+      var sp = document.createElement('span');
+      sp.textContent = '🎵 ' + (c.name || 'audio');
+      d.appendChild(sp);
+    });
+    if (!p.music && !tm.items.some(function (it) { return it.clip.type === 'audio'; })) {
+      el.innerHTML = '<div class="ed2-laneempty">No audio — tap + Add audio.</div>';
+    }
+  };
+
+  Editor.renderTextLane = function () {
+    var self = this, el = document.getElementById('edTrackText');
+    var p = this.project; el.innerHTML = '';
+    var pps = this.zoomPps, pad = this._padL || 0;
+    if (!p.texts.length) {
+      el.innerHTML = '<div class="ed2-laneempty">No text — tap + Add text.</div>';
+      return;
+    }
+    p.texts.forEach(function (tx) {
+      var g = L.laneGeom(tx.start, Math.max(0.5, tx.end - tx.start), pps);
+      var d = document.createElement('div');
+      d.className = 'tx-block' + (self.selTxId === tx.id ? ' sel' : '');
+      d.style.left = Math.round(pad + g.x) + 'px';
+      d.style.width = Math.max(28, Math.round(g.w)) + 'px';
+      d.textContent = 'T ' + String(tx.text || '').slice(0, 18);
+      d.addEventListener('click', function () {
+        self.selTxId = tx.id; self.selClipId = null; self.selOvId = null;
+        self.renderTimeline(); self.textDialog(tx);
+      });
+      el.appendChild(d);
+    });
+  };
+
+  Editor.renderOverlayLanes = function () {
+    var self = this, wrap = document.getElementById('edOverlayLanes');
+    var p = this.project; wrap.innerHTML = '';
+    var pps = this.zoomPps, pad = this._padL || 0;
+    for (var li = 0; li < p.ovLaneCount; li++) {
+      (function (lane) {
+        var lh = document.createElement('div');
+        lh.className = 'ed2-lanehead';
+        lh.innerHTML = '<span>🖼️ Overlay ' + (lane + 1) + '</span>';
+        var ab = document.createElement('button');
+        ab.className = 'btn ghost xs'; ab.textContent = '+ Add overlay';
+        ab.onclick = function () { self.addOverlay(lane); };
+        lh.appendChild(ab);
+        wrap.appendChild(lh);
+        var tr = document.createElement('div');
+        tr.className = 'ed2-lanetrack';
+        var has = false;
+        p.overlays.forEach(function (ov) {
+          if (ov.lane !== lane) return;
+          has = true;
+          var g = L.laneGeom(ov.start, ov.dur, pps);
+          var d = document.createElement('div');
+          d.className = 'ov-block' + (self.selOvId === ov.id ? ' sel' : '');
+          d.style.left = Math.round(pad + g.x) + 'px';
+          d.style.width = Math.max(28, Math.round(g.w)) + 'px';
+          d.textContent = (ov.type === 'video' ? '🎞 ' : '🖼 ') + String(ov.name || '').slice(0, 16);
+          d.addEventListener('click', function () {
+            self.selOvId = ov.id; self.selClipId = null; self.selTxId = null;
+            self.renderTimeline(); self.setTool('overlay');
+          });
+          tr.appendChild(d);
+        });
+        if (!has) {
+          var em = document.createElement('div');
+          em.className = 'ed2-laneempty'; em.textContent = 'Empty';
+          tr.appendChild(em);
+        }
+        wrap.appendChild(tr);
+      })(li);
+    }
+  };
+
+  Editor.addOverlayLane = function () {
+    var p = this.project;
+    if (p.ovLaneCount >= 3) { toast('Maximum 3 overlay tracks.', true); return; }
+    p.ovLaneCount++;
+    this.snapshot(); Store.persist(); this.renderOverlayLanes();
+    toast('Overlay track ' + p.ovLaneCount + ' added.');
+  };
+
+  Editor.addOverlay = function (lane) {
+    var self = this;
+    this._ovLanePick = lane == null ? 0 : lane;
+    document.getElementById('edOverlayInput').click();
+  };
+  Editor.commitOverlayFile = function (file) {
+    var self = this, p = this.project;
+    var isVid = /^video\//.test(file.type || '');
+    var url = URL.createObjectURL(file);
+    var id = Store.uid('ov');
+    Store.mediaCache.set(id, url);
+    var ov = {
+      id: id, type: isVid ? 'video' : 'photo', name: file.name, url: url,
+      start: +this.t.toFixed(2), dur: 3, x: 0.5, y: 0.5, scale: 0.4,
+      rotation: 0, opacity: 1, lane: this._ovLanePick || 0
+    };
+    function done(dur) {
+      if (isVid && dur) ov.dur = Math.min(8, Math.max(1, dur));
+      p.overlays.push(ov);
+      self.selOvId = id; self.selClipId = null; self.selTxId = null;
+      self.snapshot(); Store.persist(); self.syncMedia();
+      self.renderTimeline(); self.drawOnce(); self.setTool('overlay');
+      toast('Overlay added.');
+    }
+    if (isVid) {
+      var v = document.createElement('video');
+      v.preload = 'metadata'; v.muted = true; v.src = url;
+      v.addEventListener('loadedmetadata', function () { done(v.duration || 5); });
+      v.addEventListener('error', function () { done(5); });
+      setTimeout(function () { if (!p.overlays.some(function (o) { return o.id === id; })) done(5); }, 8000);
+    } else done(3);
+  };
+
+  Editor.selOverlay = function () {
+    var p = this.project; if (!p || !this.selOvId) return null;
+    for (var i = 0; i < p.overlays.length; i++) if (p.overlays[i].id === this.selOvId) return p.overlays[i];
+    return null;
+  };
+  Editor.deleteOverlay = function () {
+    var p = this.project, ov = this.selOverlay();
+    if (!ov) return;
+    var self = this;
+    App.confirm('Delete this overlay?', function (ok) {
+      if (!ok) return;
+      p.overlays = p.overlays.filter(function (o) { return o.id !== ov.id; });
+      self.selOvId = null;
+      self.snapshot(); Store.persist(); self.syncMedia();
+      self.renderTimeline(); self.drawOnce(); self.renderPanel();
+      toast('Overlay deleted.');
+    });
+  };
+
+  /* ================= CLIP STRIP ================= */
+  var STRIP = [
+    { id: 'mute', ic: '🔇', label: 'Mute' },
+    { id: 'split', ic: '🔪', label: 'Split' },
+    { id: 'trim', ic: '✂️', label: 'Trim' },
+    { id: 'speed', ic: '⏩', label: 'Speed' },
+    { id: 'volume', ic: '🔊', label: 'Volume' },
+    { id: 'delete', ic: '🗑️', label: 'Delete' },
+    { id: 'duplicate', ic: '⧉', label: 'Duplicate' },
+    { id: 'crop', ic: '◫', label: 'Crop', soon: true },
+    { id: 'rotate', ic: '🔄', label: 'Rotate' },
+    { id: 'flip', ic: '⇄', label: 'Flip' },
+    { id: 'reverse', ic: '◀◀', label: 'Reverse', soon: true },
+    { id: 'freeze', ic: '❄️', label: 'Freeze' },
+    { id: 'adjust', ic: '🎚️', label: 'Adjust' },
+    { id: 'filter', ic: '🎨', label: 'Filter' },
+    { id: 'cover', ic: '🖼️', label: 'Cover' }
+  ];
+  Editor.renderClipStrip = function () {
+    var el = document.getElementById('edClipStrip');
+    var c = this.selClip();
+    // tool panel takes priority over the strip
+    if (!c || this.tool) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    var self = this;
+    el.style.display = 'flex'; el.innerHTML = '';
+    STRIP.forEach(function (s) {
+      var b = document.createElement('button');
+      b.className = 'cs-btn' + (s.soon ? ' soon' : '');
+      var label = s.label, ic = s.ic;
+      if (s.id === 'mute') { label = c.muted ? 'Unmute' : 'Mute'; ic = c.muted ? '🔈' : '🔇'; }
+      b.innerHTML = '<span class="ic">' + ic + '</span><span>' + label + '</span>';
+      b.onclick = function () { self.clipStripAction(s.id); };
+      el.appendChild(b);
+    });
+  };
+  Editor.clipStripAction = function (id) {
+    var self = this, c = this.selClip();
+    if (!c) { toast('Select a clip first.', true); return; }
+    switch (id) {
+      case 'mute':
+        c.muted = !c.muted;
+        this.snapshot(); Store.persist(); this.drawOnce(); this.renderTimeline();
+        toast(c.muted ? 'Clip muted.' : 'Clip unmuted.');
+        break;
+      case 'split': this.splitAtPlayhead(); break;
+      case 'trim': this.setTool('trim'); break;
+      case 'speed': this.setTool('speed'); break;
+      case 'volume': this.setTool('audio'); break;
+      case 'delete': this.deleteClip(); break;
+      case 'duplicate': this.duplicateClip(); break;
+      case 'crop': toast('Crop is coming soon.', true); break;
+      case 'rotate': this.setTool('rotate'); break;
+      case 'flip':
+        c.flipH = !c.flipH;
+        this.snapshot(); Store.persist(); this.drawOnce(); this.renderTimeline();
+        toast(c.flipH ? 'Flipped horizontally.' : 'Flip off.');
+        break;
+      case 'reverse': toast('Reverse is coming soon.', true); break;
+      case 'freeze': this.freezeFrame(); break;
+      case 'adjust': this.setTool('adjust'); break;
+      case 'filter': this.setTool('filter'); break;
+      case 'cover': this.openCoverPicker(); break;
+    }
+  };
+  Editor.freezeFrame = function () {
+    var self = this, p = this.project;
+    var found = Store.clipAt(this.t);
+    if (!found) { toast('Nothing to freeze at the playhead.', true); return; }
+    var idx = found.index;
+    try {
+      var url = this.canvas.toDataURL('image/jpeg', 0.85);
+      var id = Store.uid('clip');
+      Store.mediaCache.set(id, url);
+      var nc = {
+        id: id, type: 'photo', name: '❄ Freeze frame', url: url,
+        duration: 2, in: 0, out: 2, speed: 1, rotation: 0, fit: 'cover',
+        transitionIn: 'none', kb: false, volume: 1, muted: true
+      };
+      p.clips.splice(idx + 1, 0, nc);
+      this.snapshot(); Store.persist(); this.syncMedia();
+      this.renderTimeline(); this.drawOnce(); this.updateTransport();
+      toast('Freeze frame added (2s).');
+    } catch (e) { toast('Could not capture frame.', true); }
+  };
+
+  /* ================= COVER PICKER ================= */
+  Editor.openCoverPicker = function () {
+    var self = this;
+    var total = Store.timing().total || 1;
+    App.modal(
+      '<h3>🖼️ Project cover</h3>' +
+      '<p class="muted">Scrub to pick a frame, then save it as the project cover.</p>' +
+      '<input type="range" id="cvSeek" min="0" max="1000" value="' + Math.round(this.t / total * 1000) + '" style="width:100%;min-height:44px">' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" id="cvOk" style="flex:1">Save cover</button>' +
+      '<button class="btn ghost" id="cvNo">Cancel</button></div>',
+      function (root) {
+        root.querySelector('#cvSeek').oninput = function (e) {
+          self.seek(total * (e.target.value / 1000));
+        };
+        root.querySelector('#cvNo').onclick = App.closeModal;
+        root.querySelector('#cvOk').onclick = function () {
+          try {
+            var url = self.canvas.toDataURL('image/jpeg', 0.8);
+            self.project.cover = url;
+            self.snapshot(); Store.persist(); App.closeModal();
+            toast('Cover saved.');
+          } catch (e) { toast('Could not save cover.', true); }
+        };
+      }
+    );
+  };
+
+  /* ================= PANEL: ADJUST ================= */
+  var ADJUSTS = [
+    { k: 'b', label: 'Brightness', min: 0.3, max: 2, def: 1, css: function (v) { return 'brightness(' + v + ')'; } },
+    { k: 'c', label: 'Contrast', min: 0.3, max: 2, def: 1, css: function (v) { return 'contrast(' + v + ')'; } },
+    { k: 's', label: 'Saturation', min: 0, max: 2.5, def: 1, css: function (v) { return 'saturate(' + v + ')'; } },
+    { k: 'h', label: 'Hue', min: -180, max: 180, def: 0, css: function (v) { return 'hue-rotate(' + v + 'deg)'; } },
+    { k: 'sep', label: 'Warmth', min: 0, max: 1, def: 0, css: function (v) { return 'sepia(' + v + ')'; } },
+    { k: 'gray', label: 'B&W', min: 0, max: 1, def: 0, css: function (v) { return 'grayscale(' + v + ')'; } },
+    { k: 'blur', label: 'Blur', min: 0, max: 8, def: 0, css: function (v) { return 'blur(' + v + 'px)'; } }
+  ];
+  Editor.adjustFilter = function (clip) {
+    var a = clip.adjust; if (!a) return '';
+    var parts = [];
+    ADJUSTS.forEach(function (d) {
+      var v = a[d.k];
+      if (v != null && v !== d.def) parts.push(d.css(+v.toFixed(3)));
+    });
+    return parts.join(' ');
+  };
+  Editor.panel_adjust = function (el) {
+    var self = this, c = this.selClip();
+    if (!c) { el.innerHTML = '<p class="hint">Select a clip first.</p>'; return; }
+    c.adjust = c.adjust || {};
+    var d = document.createElement('div');
+    d.innerHTML = '<h4>🎚️ Adjust — ' + esc(c.name) + '</h4>';
+    ADJUSTS.forEach(function (a) {
+      var v = c.adjust[a.k] != null ? c.adjust[a.k] : a.def;
+      var row = document.createElement('div');
+      row.className = 'adj-row';
+      row.innerHTML = '<div class="lbl"><span>' + a.label + '</span><span>' + v + '</span></div>';
+      var inp = document.createElement('input');
+      inp.type = 'range'; inp.min = a.min; inp.max = a.max; inp.step = '0.01'; inp.value = v;
+      inp.oninput = function (e) {
+        c.adjust[a.k] = +e.target.value;
+        row.querySelector('.lbl span:last-child').textContent = e.target.value;
+        self.drawOnce();
+      };
+      inp.onchange = function () { self.snapshot(); Store.persist(); };
+      row.appendChild(inp);
+      d.appendChild(row);
+    });
+    var rb = document.createElement('button');
+    rb.className = 'btn ghost sm'; rb.textContent = 'Reset adjustments';
+    rb.onclick = function () {
+      c.adjust = {}; self.snapshot(); Store.persist(); self.drawOnce(); self.renderPanel();
+      toast('Adjustments reset.');
+    };
+    d.appendChild(rb);
+    el.appendChild(d);
+  };
+
+  /* ================= PANEL: AI ================= */
+  Editor.panel_ai = function (el) {
+    var rows = [
+      { ic: '✂️', t: 'AI Clipper', d: 'Analyzes video and suggests the best sections to keep. Needs an AI backend — architecture ready, not connected yet.' },
+      { ic: '💬', t: 'Auto Captions', d: 'Speech-to-text captions. Needs a transcription backend — not available on this device.' },
+      { ic: '🪄', t: 'Background Removal', d: 'AI person segmentation. Needs a vision backend — not available on this device.' },
+      { ic: '🔍', t: 'AI Enhance', d: 'AI upscaling/denoise. Needs a GPU backend — not available on this device.' }
+    ];
+    var d = document.createElement('div');
+    d.innerHTML = '<h4>🤖 AI Tools</h4><p class="muted" style="margin-bottom:10px">These need an online AI backend. Nothing here is faked — unavailable features are marked honestly.</p>';
+    rows.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'ai-row';
+      row.innerHTML = '<span class="ic">' + r.ic + '</span><span class="tx"><b>' + esc(r.t) + '</b>' + esc(r.d) + '</span><span class="ai-badge">UNAVAILABLE</span>';
+      d.appendChild(row);
+    });
+    el.appendChild(d);
+  };
+
+  /* ================= PANEL: OVERLAY ================= */
+  Editor.panel_overlay = function (el) {
+    var self = this, p = this.project;
+    var d = document.createElement('div');
+    d.innerHTML = '<h4>🖼️ Overlays</h4>';
+    if (!p.overlays.length) d.innerHTML += '<p class="muted">No overlays yet — use + Add overlay on a track.</p>';
+    p.overlays.forEach(function (ov) {
+      var row = document.createElement('div');
+      row.className = 'ov-row' + (self.selOvId === ov.id ? ' sel' : '');
+      row.innerHTML = '<span class="nm">' + (ov.type === 'video' ? '🎞 ' : '🖼 ') + esc(ov.name || '') + '</span>';
+      var eb = document.createElement('button'); eb.className = 'btn ghost xs'; eb.textContent = 'Edit';
+      eb.onclick = function () { self.selOvId = ov.id; self.ovEditDialog(ov); };
+      var db = document.createElement('button'); db.className = 'btn danger xs'; db.textContent = '✕';
+      db.onclick = function () { self.selOvId = ov.id; self.deleteOverlay(); };
+      row.appendChild(eb); row.appendChild(db);
+      row.addEventListener('click', function (e) {
+        if (e.target === eb || e.target === db) return;
+        self.selOvId = ov.id; self.selClipId = null; self.selTxId = null;
+        self.renderTimeline();
+      });
+      d.appendChild(row);
+    });
+    var ab = document.createElement('button');
+    ab.className = 'btn primary sm'; ab.textContent = '＋ Add overlay';
+    ab.style.marginTop = '6px';
+    ab.onclick = function () { self.addOverlay(0); };
+    d.appendChild(ab);
+    el.appendChild(d);
+  };
+  Editor.ovEditDialog = function (ov) {
+    var self = this;
+    App.modal(
+      '<h3>🖼️ Overlay</h3>' +
+      '<div class="adj-row"><div class="lbl"><span>Size</span><span id="ovSv">' + ov.scale + '</span></div><input type="range" id="ovS" min="0.1" max="1.5" step="0.01" value="' + ov.scale + '"></div>' +
+      '<div class="adj-row"><div class="lbl"><span>Opacity</span><span id="ovOv">' + ov.opacity + '</span></div><input type="range" id="ovO" min="0.05" max="1" step="0.01" value="' + ov.opacity + '"></div>' +
+      '<div class="adj-row"><div class="lbl"><span>Rotation°</span><span id="ovRv">' + ov.rotation + '</span></div><input type="range" id="ovR" min="-180" max="180" step="1" value="' + ov.rotation + '"></div>' +
+      '<div class="adj-row"><div class="lbl"><span>X position</span><span id="ovXv">' + ov.x + '</span></div><input type="range" id="ovX" min="0" max="1" step="0.01" value="' + ov.x + '"></div>' +
+      '<div class="adj-row"><div class="lbl"><span>Y position</span><span id="ovYv">' + ov.y + '</span></div><input type="range" id="ovY" min="0" max="1" step="0.01" value="' + ov.y + '"></div>' +
+      '<div class="row"><div style="flex:1"><label class="lbl">Duration (s)</label><input type="number" id="ovD" min="0.5" max="60" step="0.5" value="' + ov.dur + '"></div></div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn primary" id="ovOk" style="flex:1">Done</button>' +
+      '<button class="btn danger" id="ovDel">Delete</button></div>',
+      function (root) {
+        function wire(id, key, lab) {
+          root.querySelector('#' + id).oninput = function (e) {
+            ov[key] = +e.target.value;
+            root.querySelector('#' + lab).textContent = e.target.value;
+            self.drawOnce();
+          };
+        }
+        wire('ovS', 'scale', 'ovSv'); wire('ovO', 'opacity', 'ovOv');
+        wire('ovR', 'rotation', 'ovRv'); wire('ovX', 'x', 'ovXv'); wire('ovY', 'y', 'ovYv');
+        root.querySelector('#ovD').onchange = function (e) {
+          ov.dur = Math.max(0.5, Math.min(60, parseFloat(e.target.value) || 3));
+          self.renderTimeline();
+        };
+        root.querySelector('#ovOk').onclick = function () {
+          self.snapshot(); Store.persist(); App.closeModal();
+          self.renderTimeline(); self.drawOnce(); self.renderPanel();
+        };
+        root.querySelector('#ovDel').onclick = function () { App.closeModal(); self.deleteOverlay(); };
+      }
+    );
   };
 })();
