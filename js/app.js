@@ -65,12 +65,20 @@
   var NAV_IDS = ['screen-home', 'screen-create', 'screen-projects', 'screen-aitools', 'screen-profile'];
   var App = {
     deepLink: null,
+    _hist: [],
     show: function (id) {
       // stop per-screen loops
       if (id !== 'screen-photovideo' && window.PV && PV.stopPreview) PV.stopPreview();
       if (id !== 'screen-editor' && window.Editor && Editor.playing) Editor.pause();
       if (id !== 'screen-txdetail' && window.TXDetail) TXDetail.stop();
       if (id !== 'screen-txgen' && window.TXGen) TXGen.cancel();
+      // track history (for back button)
+      var cur = document.querySelector('.screen.active');
+      var curId = cur ? cur.id : null;
+      if (curId && curId !== id) {
+        this._hist.push(curId);
+        if (this._hist.length > 20) this._hist.shift();
+      }
       document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
       var el = document.getElementById(id);
       if (el) el.classList.add('active');
@@ -78,9 +86,19 @@
       document.querySelectorAll('#bottomnav button').forEach(function (b) {
         b.classList.toggle('active', b.getAttribute('data-nav') === id);
       });
+      // App header + bottom nav only on home — more space elsewhere
+      var ab = document.getElementById('appbar');
+      if (ab) ab.style.display = (id === 'screen-home') ? '' : 'none';
+      var bn = document.getElementById('bottomnav');
+      if (bn) bn.style.display = (id === 'screen-home') ? '' : 'none';
       if (id === 'screen-projects' || id === 'screen-home') Projects.render();
       if (id === 'screen-profile') renderProfile();
       if (id === 'screen-photovideo' && window.PV) PV.startPreview();
+    },
+    back: function () {
+      var prev = this._hist.pop();
+      if (prev && document.getElementById(prev)) this.show(prev);
+      else this.show('screen-home');
     },
     modal: modal, closeModal: closeModal, confirm: confirmDlg,
     refreshPlanBadge: function () {
@@ -469,7 +487,7 @@
 
   /* ================= EDITOR chrome ================= */
   function initEditorChrome() {
-    document.getElementById('edBack').onclick = function () { Editor.teardown(); App.show('screen-projects'); };
+    document.getElementById('edBack').onclick = function () { Editor.teardown(); App.back(); };
     document.getElementById('edName').onclick = function () {
       var p = Editor.project; if (!p) return;
       modal('<h3>Rename</h3><input type="text" id="enV" value="' + esc(p.name) + '">' +
