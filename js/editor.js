@@ -21,6 +21,7 @@
     vidEls: new Map(), imgEls: new Map(), stills: new Map(), // clipId -> dataURL (end frame)
     playing: false, t: 0, rafId: 0, lastTs: 0,
     selClipId: null, tool: null,
+    trimModeId: null, // clip id currently showing trim handles (trim mode)
     audioKept: null, // offsets for resume
     placingSticker: null, selStickerId: null,
     _seeking: false,
@@ -39,6 +40,7 @@
       this.vidEls = new Map(); this.imgEls = new Map(); this.stills = new Map();
       this.thumbStrips = new Map(); this.ovEls = new Map();
       this.t = 0; this.playing = false; this.selClipId = null; this.tool = null;
+      this.trimModeId = null;
       this.selOvId = null; this.selTxId = null;
       this.audioKept = null; this.placingSticker = null; this.selStickerId = null;
       this.staged = []; this.audioBufs = new Map(); this._tlBound = false;
@@ -646,6 +648,33 @@
     playheadViewX: function (t, pps, headW, scrollLeft) {
       return (headW || 0) + t * pps - scrollLeft;
     },
+    /* ---- Clip selection gesture model (CapCut-style) ----
+       TAP (quick, minimal movement) on a clip = select clip + seek to tap time.
+       LONG PRESS (finger held, then drag) on a clip = move/reorder the clip.
+       SWIPE (fast move beyond threshold) = cancel tap, treat as scroll/scrub. */
+    TAP_MAX_PX: 12,
+    LONGPRESS_MS: 450,
+    classifyPress: function (dtMs, movedPx) {
+      if (movedPx > this.TAP_MAX_PX) return 'swipe';
+      if (dtMs >= this.LONGPRESS_MS) return 'longpress';
+      return 'tap';
+    },
+    /* pure split math: split `clip` at playhead time `t` (item starts at itemStart).
+       Returns {a:{in,out}, b:{in,out}} or null when too close to an edge. */
+    splitAt: function (clip, t, itemStart) {
+      var speed = clip.speed || 1;
+      var m = clip.in + (t - itemStart) * speed;
+      if (m - clip.in < 0.25 || clip.out - m < 0.25) return null;
+      return {
+        a: { 'in': +clip.in.toFixed(2), out: +m.toFixed(2) },
+        b: { 'in': +m.toFixed(2), out: +clip.out.toFixed(2) }
+      };
+    },
+    /* project time from a clientX on the timeline:
+       t = (scrollLeft + (cx - viewLeft) - headW) / pps */
+    tapTimeFromClientX: function (cx, viewLeft, scrollLeft, headW, pps) {
+      return (scrollLeft + (cx - viewLeft) - (headW || 0)) / Math.max(1, pps);
+    },
     /* drop index for clip reorder drag: block whose center span contains cx */
     dropIndex: function (geom, cx, fromIdx) {
       var to = fromIdx;
@@ -912,6 +941,13 @@
     } catch (e) {}
     return 26;
   };
+  /* project time under a clientX on the timeline (DOM wrapper) */
+  Editor.timelineTimeFromClientX = function (cx) {
+    var sc = document.getElementById('edTlScroll');
+    if (!sc) return null;
+    var r = sc.getBoundingClientRect();
+    return window.EditorLogic.tapTimeFromClientX(cx, r.left, sc.scrollLeft, this.headW(), this.zoomPps);
+  };
   /* place the playhead at the current time (content coordinates) */
   Editor.positionPlayhead = function () {
     var ph = document.getElementById('edPlayhead');
@@ -960,7 +996,7 @@
         var badgeIc = c.type === 'placeholder' ? '🎭' : c.type === 'video' ? '' : c.type === 'audio' ? '🎵' : '🖼';
         blk.innerHTML = (badgeIc ? '<span class="cbadge">' + badgeIc + '</span>' : '') + self.thumbStripHTML(c, gw) +
           (!c.url ? '<div class="relink">tap to re-link</div>' : '');
-        if (self.selClipId === c.id && c.url) {
+        if (self.trimModeId === c.id && c.url) {
           var hl = document.createElement('div'); hl.className = 'trim-handle l'; hl.title = 'Trim start';
           var hr = document.createElement('div'); hr.className = 'trim-handle r'; hr.title = 'Trim end';
           hl.addEventListener('pointerdown', function (e) { e.stopPropagation(); self.onTrimHandle(e, c, blk, 'l'); });
@@ -1199,9 +1235,11 @@
     window.addEventListener('pointercancel', onUp);
   };
 
-  /* long-press to drag a clip card and reorder; plain tap selects */
+  /* tap = select clip + seek to tap position; long-press + drag = move clip.
+     A simple tap never moves the clip: move starts only after LONGPRESS_MS
+     with the finger still down. */
   Editor.onCardDown = function (e, c, card, idx) {
-    var self = this;
+    var self = this, L = window.EditorLogic;
     if (e.button != null && e.button !== 0) return;
     if (e.target.closest && e.target.closest('.trim-handle')) return;
     var x0 = e.clientX, moved = false, dragging = false, timer = null;
@@ -1214,7 +1252,7 @@
     function onMove(ev) {
       var dx = ev.clientX - x0;
       if (!dragging) {
-        if (Math.abs(dx) > 12) { moved = true; clear(); return; }
+        if (Math.abs(dx) > L.TAP_MAX_PX) { moved = true; clear(); return; }
         return;
       }
       ev.preventDefault();
@@ -1249,11 +1287,23 @@
         if (to !== idx) self.moveClipTo(idx, to);
         return;
       }
-      if (moved) return;
+      if (moved) return; // it was a swipe — leave selection & playhead alone
       if (!c.url) { self.relinkClip(c.id); return; }
+      // TAP: select this clip AND move the playhead to the exact tap position
       self.selClipId = c.id; self.selOvId = null; self.selTxId = null;
+      if (self.trimModeId && self.trimModeId !== c.id) self.trimModeId = null;
       self.setTool(null);
-      self.renderTimeline(); self.drawOnce();
+      self.renderTimeline();
+      var tapT = self.timelineTimeFromClientX(ev.clientX != null ? ev.clientX : x0);
+      if (tapT != null) {
+        var tm = Store.timing(), it = null;
+        for (var i = 0; i < tm.items.length; i++) if (tm.items[i].clip.id === c.id) { it = tm.items[i]; break; }
+        if (it) tapT = Math.max(it.start, Math.min(it.end - 0.01, tapT));
+        tapT = Math.max(0, Math.min(tm.total, tapT));
+        self.seek(tapT);
+      } else {
+        self.drawOnce(); self.updateTransport();
+      }
     }
     window.addEventListener('pointermove', onMove, { passive: false });
     window.addEventListener('pointerup', onUp);
@@ -1263,7 +1313,7 @@
       if (moved) return;
       dragging = true;
       try { if (navigator.vibrate) navigator.vibrate(25); } catch (e2) {}
-    }, 450);
+    }, L.LONGPRESS_MS);
   };
 
   /* keep the playhead visible: pin timeline left edge at scrollLeft=0 while
@@ -1299,6 +1349,8 @@
     }
     inner.addEventListener('pointerdown', function (e) {
       if (e.target.closest && (e.target.closest('.clip-block') || e.target.closest('#edPlayhead') || e.target.closest('.tl-add'))) return;
+      // tapping empty timeline = move playhead only (selection stays); exits trim mode
+      if (self.trimModeId) { self.trimModeId = null; self.renderTimeline(); }
       scrubbing = true; self._seeking = true; seekFromClientX(e.clientX);
     });
     window.addEventListener('pointermove', function (e) { if (scrubbing) seekFromClientX(e.clientX); });
@@ -1372,24 +1424,25 @@
       if (!ok) return;
       p.clips = p.clips.filter(function (x) { return x.id !== c.id; });
       if (self.selClipId === c.id) self.selClipId = null;
+      if (self.trimModeId === c.id) self.trimModeId = null;
       self.snapshot(); Store.persist(); self.syncMedia(); self.renderTimeline(); self.drawOnce(); self.updateTransport();
       toast('Clip deleted.');
     });
   };
   Editor.splitAtPlayhead = function () {
-    var p = this.project;
+    var p = this.project, L = window.EditorLogic;
     var found = Store.clipAt(this.t);
     if (!found) { toast('Nothing to split — playhead is past the end.'); return; }
     var c = found.item.clip, idx = found.index;
-    var local = (this.t - found.item.start) * (c.speed || 1); // media seconds into clip
-    var m = c.in + local;
-    if (m - c.in < 0.25 || c.out - m < 0.25) { toast('Move the playhead a bit inside the clip to split.'); return; }
-    var a = Object.assign({}, c, { id: Store.uid('clip'), out: +m.toFixed(2), name: c.name });
-    var b = Object.assign({}, c, { id: Store.uid('clip'), in: +m.toFixed(2), transitionIn: 'none' });
+    var r = L.splitAt(c, this.t, found.item.start);
+    if (!r) { toast('Move the playhead a bit inside the clip to split.'); return; }
+    var a = Object.assign({}, c, { id: Store.uid('clip'), out: r.a.out, name: c.name });
+    var b = Object.assign({}, c, { id: Store.uid('clip'), 'in': r.b['in'], transitionIn: 'none' });
     var self = this;
     [a, b].forEach(function (x) { if (c.url) Store.mediaCache.set(x.id, c.url); x.url = c.url; });
     p.clips.splice(idx, 1, a, b);
-    this.selClipId = b.id;
+    this.trimModeId = null;
+    this.selClipId = a.id; // select the LEFT clip (contains the playhead position)
     this.snapshot(); Store.persist(); this.syncMedia(); this.renderTimeline(); this.drawOnce();
     toast('Clip split.');
   };
@@ -1422,7 +1475,7 @@
   Editor.doUndo = function () {
     if (Store.undo()) {
       this.project = Store.current;
-      this.selClipId = null; this.sizeCanvas(); this.syncMedia();
+      this.selClipId = null; this.trimModeId = null; this.sizeCanvas(); this.syncMedia();
       this.renderTimeline(); this.renderStickers(); this.drawOnce(); this.updateTransport(); this.renderPanel();
       document.getElementById('edName').textContent = this.project.name;
     }
@@ -1431,7 +1484,7 @@
   Editor.doRedo = function () {
     if (Store.redo()) {
       this.project = Store.current;
-      this.selClipId = null; this.sizeCanvas(); this.syncMedia();
+      this.selClipId = null; this.trimModeId = null; this.sizeCanvas(); this.syncMedia();
       this.renderTimeline(); this.renderStickers(); this.drawOnce(); this.updateTransport(); this.renderPanel();
       document.getElementById('edName').textContent = this.project.name;
     }
@@ -2029,13 +2082,14 @@
     { id: 'trim', ic: '✂️', label: 'Trim' },
     { id: 'speed', ic: '⏩', label: 'Speed' },
     { id: 'volume', ic: '🔊', label: 'Volume' },
-    { id: 'delete', ic: '🗑️', label: 'Delete' },
-    { id: 'duplicate', ic: '⧉', label: 'Duplicate' },
+    { id: 'animation', ic: '✨', label: 'Animation', soon: true },
     { id: 'crop', ic: '◫', label: 'Crop', soon: true },
     { id: 'rotate', ic: '🔄', label: 'Rotate' },
-    { id: 'flip', ic: '⇄', label: 'Flip' },
     { id: 'reverse', ic: '◀◀', label: 'Reverse', soon: true },
     { id: 'freeze', ic: '❄️', label: 'Freeze' },
+    { id: 'duplicate', ic: '⧉', label: 'Duplicate' },
+    { id: 'delete', ic: '🗑️', label: 'Delete' },
+    { id: 'flip', ic: '⇄', label: 'Flip' },
     { id: 'adjust', ic: '🎚️', label: 'Adjust' },
     { id: 'filter', ic: '🎨', label: 'Filter' },
     { id: 'cover', ic: '🖼️', label: 'Cover' }
@@ -2067,9 +2121,10 @@
         toast(c.muted ? 'Clip muted.' : 'Clip unmuted.');
         break;
       case 'split': this.splitAtPlayhead(); break;
-      case 'trim': this.setTool('trim'); break;
+      case 'trim': this.toggleTrimMode(); break;
       case 'speed': this.setTool('speed'); break;
       case 'volume': this.setTool('audio'); break;
+      case 'animation': toast('Clip animation is coming soon.', true); break;
       case 'delete': this.deleteClip(); break;
       case 'duplicate': this.duplicateClip(); break;
       case 'crop': toast('Crop is coming soon.', true); break;
@@ -2085,6 +2140,25 @@
       case 'filter': this.setTool('filter'); break;
       case 'cover': this.openCoverPicker(); break;
     }
+  };
+  /* Trim mode: draggable ◀ ▶ handles on the selected clip. Toggle via the
+     Trim button; exits when another clip is tapped, when tapped outside,
+     or when the clip is split/deleted. */
+  Editor.toggleTrimMode = function () {
+    var c = this.selClip();
+    if (!c) { toast('Select a clip first.', true); return; }
+    if (this.trimModeId === c.id) {
+      this.trimModeId = null;
+      toast('Trim done.');
+    } else {
+      this.trimModeId = c.id;
+      this.setTool(null);
+      toast('Drag the ◀ ▶ handles to trim.');
+    }
+    this.renderTimeline(); this.drawOnce();
+  };
+  Editor.exitTrimMode = function () {
+    if (this.trimModeId) { this.trimModeId = null; this.renderTimeline(); }
   };
   Editor.freezeFrame = function () {
     var self = this, p = this.project;
