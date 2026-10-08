@@ -118,6 +118,13 @@ input[type=range]{accent-color:var(--violet);width:100%}
 
 /* ---------- editor ---------- */
 #screen-editor{padding-bottom:8px}
+#screen-editor.active{display:flex;flex-direction:column;height:100%;overflow:hidden;overscroll-behavior:none}
+#screen-editor .ed2-header{flex:0 0 auto}
+#screen-editor .ed-preview-wrap{flex:0 0 auto}
+#screen-editor .ed2-controls,#screen-editor .ed2-time{flex:0 0 auto}
+#screen-editor .tl-wrap{flex:1 1 auto;min-height:0;overflow:hidden}
+#screen-editor .tl-clipstrip{flex:0 0 auto}
+#screen-editor .tl-toolbar{flex:0 0 auto}
 .ed-topbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .ed-title{flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .ed-preview-wrap{background:#000;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);position:relative;display:flex;align-items:center;justify-content:center;max-height:44vh;min-height:180px}
