@@ -120,8 +120,8 @@ input[type=range]{accent-color:var(--violet);width:100%}
 #screen-editor{padding-bottom:8px}
 .ed-topbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .ed-title{flex:1;font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-.ed-preview-wrap{background:#000;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);position:relative}
-#edCanvas{width:100%;display:block;aspect-ratio:16/9;background:#000}
+.ed-preview-wrap{background:#000;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);position:relative;display:flex;align-items:center;justify-content:center;max-height:44vh;min-height:180px}
+#edCanvas{width:auto;max-width:100%;max-height:44vh;display:block;background:#000}
 #edStickerLayer{position:absolute;inset:0;pointer-events:none}
 #edStickerLayer .stk{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;cursor:move;user-select:none}
 .ed-transport{display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(10,10,20,.9)}
