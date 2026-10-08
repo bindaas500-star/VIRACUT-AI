@@ -494,8 +494,18 @@
       Editor.seek(total * (seek.value / 1000));
     });
     document.getElementById('edFileInput').onchange = function (e) {
-      Editor.importFiles(e.target.files); e.target.value = '';
+      Editor.stageFiles(e.target.files); e.target.value = '';
     };
+    document.getElementById('edFull').onclick = function () {
+      var wrap = document.getElementById('edPreviewWrap');
+      try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else if (wrap.requestFullscreen) wrap.requestFullscreen();
+        else toast('Fullscreen not supported on this device.', true);
+      } catch (e) { toast('Fullscreen not supported on this device.', true); }
+    };
+    document.getElementById('edZoomIn').onclick = function () { Editor.setZoom(1); };
+    document.getElementById('edZoomOut').onclick = function () { Editor.setZoom(-1); };
     document.getElementById('edMusicInput').onchange = function (e) {
       var f = e.target.files[0];
       if (f && Editor.project) AudioLab.Music.set(f, Editor.project);
@@ -505,29 +515,116 @@
     document.addEventListener('visibilitychange', function () { if (document.hidden && Editor.playing) Editor.pause(); });
   }
 
+  /* ---------- export screen ---------- */
+  var EX_RES = { '480p': 480, '720p': 720, '1080p': 1080 };
+  var EX_QUALITY = { Low: 2500000, Medium: 6000000, High: 12000000 };
+  function exportSizeFor(pick, aspect) {
+    var s = EX_RES[pick] || 720;
+    if (aspect === '16:9') return { w: Math.round(s * 16 / 9), h: s };
+    if (aspect === '1:1') return { w: s, h: s };
+    return { w: Math.round(s * 9 / 16), h: s }; // 9:16
+  }
+  function fmtMB(bytes) {
+    var mb = bytes / 1048576;
+    return mb >= 100 ? Math.round(mb) + ' MB' : mb.toFixed(1) + ' MB';
+  }
   function startExport() {
     if (Exporter.exporting) return;
     var p = Editor.project;
     if (!p || !Store.timing().total) { toast('Add clips before exporting.', true); return; }
-    var size = Plans.exportSize(p.aspect);
-    toast('Exporting ' + size.w + '×' + size.h + (Plans.watermark() ? ' (Free adds watermark)' : ' (Pro, no watermark)') + '…');
-    Exporter.export(function () { /* progress bar handled by Exporter.showProgress */ }).then(function (out) {
-      modal('<h3>✅ Export ready</h3>' +
-        '<video src="' + out.url + '" controls style="width:100%;border-radius:12px"></video>' +
-        '<div class="stack" style="margin-top:12px">' +
-        '<button class="btn primary block" id="exDl">⬇ Download video</button>' +
-        '<button class="btn ghost block" id="exSoc">📣 Open Social Kit</button>' +
-        '<button class="btn ghost block" id="exClose">Close</button></div>',
-        function (root) {
-          root.querySelector('#exDl').onclick = function () { Exporter.download(out.url, p.name); toast('Download started.'); };
-          root.querySelector('#exSoc').onclick = function () { closeModal(); renderSocial(p); App.show('screen-social'); };
-          root.querySelector('#exClose').onclick = closeModal;
+    var total = Store.timing().total;
+    var sel = { res: '720p', fps: 30, q: 'Medium' };
+    function estText() {
+      var size = exportSizeFor(sel.res, p.aspect);
+      var bytes = window.EditorLogic
+        ? EditorLogic.estBytes(total, EX_QUALITY[sel.q], 128000)
+        : total * (EX_QUALITY[sel.q] + 128000) / 8;
+      return size.w + '×' + size.h + ' · ' + sel.fps + 'fps · ~' + fmtMB(bytes) + (Plans.watermark() ? ' · watermark' : ' · no watermark');
+    }
+    function pills(list, cur, cb) {
+      return list.map(function (x) {
+        return '<button class="pill' + (x === cur ? ' on' : '') + '" data-v="' + x + '">' + x + '</button>';
+      }).join('');
+    }
+    modal('<h3>📤 Export video</h3>' +
+      '<label class="lbl">Resolution</label><div class="pills" id="exRes">' + pills(['480p', '720p', '1080p'], sel.res) + '</div>' +
+      '<label class="lbl" style="margin-top:10px">Frame rate</label><div class="pills" id="exFps">' + pills([24, 30, 60], sel.fps) + '</div>' +
+      '<label class="lbl" style="margin-top:10px">Quality</label><div class="pills" id="exQ">' + pills(['Low', 'Medium', 'High'], sel.q) + '</div>' +
+      '<p class="muted" id="exEst" style="margin-top:10px">' + esc(estText()) + '</p>' +
+      '<div class="stack" style="margin-top:8px">' +
+      '<button class="btn primary block" id="exGo">▶ Start export</button>' +
+      '<button class="btn ghost block" id="exNo">Cancel</button></div>',
+      function (root) {
+        function wire(id, key, parse) {
+          root.querySelectorAll('#' + id + ' .pill').forEach(function (b) {
+            b.onclick = function () {
+              sel[key] = parse ? parse(b.getAttribute('data-v')) : b.getAttribute('data-v');
+              root.querySelectorAll('#' + id + ' .pill').forEach(function (x) { x.classList.remove('on'); });
+              b.classList.add('on');
+              root.querySelector('#exEst').textContent = estText();
+            };
+          });
+        }
+        wire('exRes', 'res'); wire('exFps', 'fps', function (v) { return +v; }); wire('exQ', 'q');
+        root.querySelector('#exNo').onclick = closeModal;
+        root.querySelector('#exGo').onclick = function () { runExportNow(sel); };
+      });
+  }
+
+  function runExportNow(sel) {
+    var p = Editor.project;
+    var size = exportSizeFor(sel.res, p.aspect);
+    var opts = { size: size, fps: sel.fps, videoBps: EX_QUALITY[sel.q] };
+    modal('<h3>⏳ Exporting…</h3>' +
+      '<div class="prog"><div class="prog-fill" id="exFill" style="width:0%"></div></div>' +
+      '<p class="muted center" id="exPct">0%</p>' +
+      '<button class="btn danger block" id="exCancel">Cancel export</button>',
+      function (root) {
+        var cancelled = false;
+        root.querySelector('#exCancel').onclick = function () {
+          cancelled = true;
+          Exporter.cancelExport();
+          root.querySelector('#exPct').textContent = 'Cancelling…';
+        };
+        Exporter.export(opts, function (r) {
+          var pct = Math.round(r * 100);
+          var f = root.querySelector('#exFill'); if (f) f.style.width = pct + '%';
+          var t = root.querySelector('#exPct'); if (t && !cancelled) t.textContent = pct + '%';
+        }).then(function (out) {
+          showExportResult(out, p);
+        }).catch(function (err) {
+          closeModal();
+          if (!/cancelled/i.test(err && err.message || '')) toast('Export failed: ' + (err.message || err), true);
+          else toast('Export cancelled.');
         });
-      toast('Export finished.');
-    }).catch(function (err) {
-      closeModal();
-      toast('Export failed: ' + (err.message || err), true);
-    });
+      });
+  }
+
+  function showExportResult(out, p) {
+    var fname = (p.name || 'viracut').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'viracut';
+    modal('<h3>✅ Export ready</h3>' +
+      '<video src="' + out.url + '" controls style="width:100%;border-radius:12px"></video>' +
+      '<p class="muted center">' + out.size.w + '×' + out.size.h + ' · ' + fmtMB(out.blob.size) + '</p>' +
+      '<div class="stack" style="margin-top:12px">' +
+      '<button class="btn primary block" id="exDl">⬇ Save to gallery</button>' +
+      '<button class="btn ghost block" id="exShare">📤 Share</button>' +
+      '<button class="btn ghost block" id="exSoc">📣 Open Social Kit</button>' +
+      '<button class="btn ghost block" id="exClose">Close</button></div>',
+      function (root) {
+        root.querySelector('#exDl').onclick = function () { Exporter.download(out.url, p.name); toast('Download started — check your gallery/downloads.'); };
+        root.querySelector('#exShare').onclick = function () {
+          var file = null;
+          try { file = new File([out.blob], fname + '.webm', { type: out.blob.type || 'video/webm' }); } catch (e) {}
+          if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: p.name }).catch(function () {});
+          } else {
+            toast('Sharing is not supported on this device — use Download instead.', true);
+          }
+        };
+        root.querySelector('#exSoc').onclick = function () { closeModal(); renderSocial(p); App.show('screen-social'); };
+        root.querySelector('#exClose').onclick = closeModal;
+      });
+    toast('Export finished.');
   }
 
   /* ================= init ================= */

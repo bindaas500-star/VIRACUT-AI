@@ -324,3 +324,29 @@ body { touch-action: manipulation; }
 .icon-btn.big{font-size:26px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;border:none}
 .ph-shutter{width:76px;height:76px;border-radius:50%;background:#fff;border:6px solid rgba(255,255,255,.35);cursor:pointer}
 .ph-shutter:active{transform:scale(.93)}
+
+/* ===== Phase 1: editor upgrade ===== */
+.ed-timeline{position:relative}
+#edPlayhead{position:absolute;top:0;bottom:0;width:2px;background:#8B5CF6;box-shadow:0 0 6px rgba(139,92,246,.9);z-index:6;pointer-events:none;display:none}
+#edDropLine{position:absolute;top:0;bottom:0;width:3px;background:#22c55e;border-radius:2px;z-index:7;pointer-events:none;display:none}
+.clip-card.dragging{opacity:.9;border-color:#8B5CF6;box-shadow:0 10px 26px rgba(0,0,0,.55)}
+.tl-zoom{display:inline-flex;gap:6px;align-items:center;margin-left:auto;margin-right:8px}
+.tl-zoom .icon-btn{font-size:18px}
+/* touch targets: min 44px on editor controls */
+.ed-topbar .icon-btn,.ed-panel .icon-btn,.tl-zoom .icon-btn{min-width:44px;min-height:44px}
+.tool-btn{min-height:44px}
+.pill{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+/* staging preview grid */
+.pv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.pv-item{background:var(--card2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.pv-item .pv-thumb{height:64px;background:#0a0a14;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pv-item .pv-thumb img,.pv-item .pv-thumb video{width:100%;height:100%;object-fit:cover}
+.pv-item .pv-name{font-size:10px;padding:5px 6px 2px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-item .pv-btns{display:flex;gap:5px;padding:5px 6px 7px}
+.pv-item .pv-btns .btn{flex:1;padding:7px 0;font-size:11.5px;min-height:38px;border-radius:9px}
+/* fullscreen preview */
+#edPreviewWrap:fullscreen{background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#edPreviewWrap:fullscreen #edCanvas{width:100%;height:auto;max-height:82vh}
+#edPreviewWrap:fullscreen .ed-transport{width:100%}
+/* export screen rows */
+.ed-panel input[type="number"]{background:var(--card2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:10px;font-size:14px;width:100%}
