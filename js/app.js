@@ -486,15 +486,15 @@
     document.getElementById('edUndo').onclick = function () { Editor.doUndo(); };
     document.getElementById('edRedo').onclick = function () { Editor.doRedo(); };
     document.getElementById('edPlay').onclick = function () { Editor.toggle(); };
-    var seek = document.getElementById('edSeek');
-    seek.addEventListener('pointerdown', function () { Editor._seeking = true; });
-    seek.addEventListener('pointerup', function () { Editor._seeking = false; });
-    seek.addEventListener('input', function () {
-      var total = Store.timing().total;
-      Editor.seek(total * (seek.value / 1000));
-    });
+    document.getElementById('edSearch').onclick = function () { toast('Search is not available in the editor yet.', true); };
+    document.getElementById('edAiUhd').onclick = function () { Editor.setTool('ai'); };
     document.getElementById('edFileInput').onchange = function (e) {
       Editor.stageFiles(e.target.files); e.target.value = '';
+    };
+    document.getElementById('edOverlayInput').onchange = function (e) {
+      var f = e.target.files[0];
+      if (f && Editor.project) Editor.commitOverlayFile(f);
+      e.target.value = '';
     };
     document.getElementById('edFull').onclick = function () {
       var wrap = document.getElementById('edPreviewWrap');
@@ -504,8 +504,6 @@
         else toast('Fullscreen not supported on this device.', true);
       } catch (e) { toast('Fullscreen not supported on this device.', true); }
     };
-    document.getElementById('edZoomIn').onclick = function () { Editor.setZoom(1); };
-    document.getElementById('edZoomOut').onclick = function () { Editor.setZoom(-1); };
     document.getElementById('edMusicInput').onchange = function (e) {
       var f = e.target.files[0];
       if (f && Editor.project) AudioLab.Music.set(f, Editor.project);
