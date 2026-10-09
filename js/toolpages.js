@@ -197,7 +197,7 @@
     greet.parentNode.insertBefore(wrap, greet.nextSibling);
   }
 
-  function init() { injectHomeCats(); }
+  function init() { /* Home now shows categories via HOME_BTNS — no injector needed */ }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

@@ -129,16 +129,12 @@
 
   /* ================= HOME ================= */
   var HOME_BTNS = [
-    { ic: '📸', t: 'Photo Editor', s: 'PixMaster inside', go: function () { if (window.PhotoUI) PhotoUI.importDialog(); } },
-    { ic: '✨', t: 'AI Video Generator', s: 'prompt → video', go: function () { App.show('screen-aivideo'); } },
-    { ic: '🖼️', t: 'Photo to Video', s: 'slideshow', go: function () { App.show('screen-photovideo'); } },
-    { ic: '✍️', t: 'AI Story', s: 'idea → script', go: function () { App.show('screen-aistory'); } },
-    { ic: '🎙️', t: 'AI Voiceover', s: 'text → voice', go: function () { App.show('screen-aivoice'); } },
-    { ic: '📝', t: 'Auto Captions', s: 'in editor', go: autoCaptionsGo },
-    { ic: '✂️', t: 'Video Editor', s: 'timeline', go: openEditorGo },
-    { ic: '🎭', t: 'Templates', s: 'one-tap styles', go: function () { App.show('screen-templates'); renderTemplates(); } },
-    { ic: '🔥', t: 'Trending Ideas', s: 'fresh daily', go: function () { App.show('screen-trending'); } },
-    { ic: '📁', t: 'My Projects', s: 'on device', go: function () { App.show('screen-projects'); } }
+    { ic: '🎬', t: 'Video Tools', s: 'editor, effects, captions', go: function () { if (window.ToolPages) ToolPages.open('video'); } },
+    { ic: '📸', t: 'Photo Tools', s: 'editor, slideshow', go: function () { if (window.ToolPages) ToolPages.open('photo'); } },
+    { ic: '🎵', t: 'Audio Tools', s: 'voice, music, sound', go: function () { if (window.ToolPages) ToolPages.open('audio'); } },
+    { ic: '🤖', t: 'AI Tools', s: 'generator, story, ideas', go: function () { if (window.ToolPages) ToolPages.open('ai'); } },
+    { ic: '📁', t: 'My Projects', s: 'on device', go: function () { App.show('screen-projects'); } },
+    { ic: '⚙️', t: 'Settings', s: 'app options', go: function () { if (window.SettingsScreen) SettingsScreen.render(); } }
   ];
   function openEditorGo() {
     if (Store.current) Editor.open(Store.current.id);
