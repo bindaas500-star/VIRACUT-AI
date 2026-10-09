@@ -1405,8 +1405,204 @@
     "particles",
     "confetti"
    ]
+  },
+  {
+   "id": "remote_masti_king",
+   "title": "Masti King",
+   "icon": "😂",
+   "category": "funny",
+   "slots": 4,
+   "duration": 10,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-09",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Comedy Bounce (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 1.8,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "glitch",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "POV:",
+      "size": 11,
+      "pos": "mid",
+      "color": "#ffffff",
+      "glow": "#f43f5e",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 1.8,
+     "slot": 2,
+     "anim": "pan-left",
+     "fx": "shake",
+     "filter": "cool",
+     "trans": "cut",
+     "text": {
+      "content": "MONDAY MORNING 😭",
+      "size": 8,
+      "pos": "mid",
+      "color": "#ffffff",
+      "glow": "#38bdf8",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 2,
+     "slot": 3,
+     "anim": "pan-right",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut",
+     "text": {
+      "content": "ME: 5 MORE MINS 😴",
+      "size": 7,
+      "pos": "mid",
+      "color": "#fde047",
+      "glow": "#f59e0b",
+      "anim": "pop"
+     }
+    },
+    {
+     "dur": 4.4,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "flash",
+     "filter": "vivid",
+     "trans": "zoom",
+     "text": {
+      "content": "HASNA MANA HAI 😂",
+      "size": 8,
+      "pos": "bottom",
+      "color": "#ffffff",
+      "glow": "#a855f7",
+      "anim": "fadeup"
+     }
+    }
+   ],
+   "overlays": [
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_golden_reveal",
+   "title": "Golden Reveal",
+   "icon": "📸",
+   "category": "photo",
+   "slots": 1,
+   "duration": 12,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-09",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Golden Hour (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 12,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "reveal",
+     "filter": "warm",
+     "trans": "fade"
+    }
+   ],
+   "overlays": [
+    "gloworbs",
+    "streak",
+    "smoke",
+    "particles"
+   ]
+  },
+  {
+   "id": "remote_chandni",
+   "title": "Chandni Raatein",
+   "icon": "💖",
+   "category": "love",
+   "slots": 4,
+   "duration": 14,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-09",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Chandni (AI loop)",
+    "mood": "romantic"
+   },
+   "scenes": [
+    {
+     "dur": 3.5,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "vignette",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "چاندنی راتیں",
+      "urdu": true,
+      "size": 11,
+      "pos": "mid",
+      "color": "#fde68a",
+      "glow": "#f59e0b",
+      "anim": "fadeup"
+     }
+    },
+    {
+     "dur": 3.5,
+     "slot": 2,
+     "anim": "pan-right",
+     "fx": "none",
+     "filter": "warm",
+     "trans": "fade"
+    },
+    {
+     "dur": 3.5,
+     "slot": 3,
+     "anim": "kenburns-in",
+     "fx": "focus",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "تیری یاد",
+      "urdu": true,
+      "size": 10,
+      "pos": "mid",
+      "color": "#fbcfe8",
+      "glow": "#ec4899",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3.5,
+     "slot": 4,
+     "anim": "slow-zoom",
+     "fx": "gloworbs",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "💖",
+      "size": 11,
+      "pos": "mid",
+      "color": "#ffffff",
+      "anim": "pop"
+     }
+    }
+   ],
+   "overlays": [
+    "bokeh",
+    "particles"
+   ]
   }
  ],
- "updated": "2026-10-08",
- "version": 6
+ "updated": "2026-10-09",
+ "version": 7
 }
