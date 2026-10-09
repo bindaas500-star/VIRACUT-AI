@@ -3,6 +3,7 @@
   'use strict';
 
   function thumbFor(p) {
+    if (!p) return '🎬';
     if (p.cover) return '<img src="' + p.cover + '">';
     if (p.clips && p.clips.length) {
       var c = p.clips[0];
@@ -21,6 +22,7 @@
   function render() {
     var grid = document.getElementById('projectGrid');
     var recent = document.getElementById('homeRecent');
+    if (!grid || !recent) return;
     var all = Store.getProjects();
     grid.innerHTML = '';
     recent.innerHTML = '';

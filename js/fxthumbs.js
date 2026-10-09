@@ -141,6 +141,8 @@
     var i, tl, dt, anyVisible = false;
     for (i = 0; i < tiles.length; i++) {
       tl = tiles[i];
+      // teardown: canvas removed from the page without FXTHUMBS.stop()
+      if (tl.cv && tl.cv.isConnected === false) { tiles.splice(i, 1); i--; continue; }
       if (!tl.visible) continue;
       anyVisible = true;
       if (!tl.lastTs) tl.lastTs = ts;

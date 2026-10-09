@@ -16,10 +16,12 @@
   /* ============ music ============ */
   var Music = {
     set: function (file, project) {
+      if (!file || !project) return;
       var url = URL.createObjectURL(file);
       Store.mediaCache.set('music_' + project.id, url);
       project.music = { name: file.name, url: url, volume: 0.6, buffer: null };
-      var c = ac();
+      var c;
+      try { c = ac(); } catch (e) { toast('Audio not supported on this device.', true); return; }
       file.arrayBuffer().then(function (ab) { return c.decodeAudioData(ab); }).then(function (buf) {
         if (project.music) project.music.buffer = buf;
         toast('Music loaded: ' + file.name);
@@ -28,6 +30,7 @@
       }).catch(function () { toast('Could not decode audio file.', true); });
     },
     clear: function (project) {
+      if (!project) return;
       project.music = null;
       Store.snapshot(); Store.persist();
     }
@@ -43,7 +46,7 @@
         self.chunks = [];
         var mr = new MediaRecorder(stream);
         self.rec = mr; self.recStart = Date.now();
-        mr.ondataavailable = function (e) { if (e.data.size) self.chunks.push(e.data); };
+        mr.ondataavailable = function (e) { if (e.data && e.data.size) self.chunks.push(e.data); };
         mr.start();
         // stop mic tracks when done is handled in stop()
         self._stream = stream;
@@ -63,16 +66,23 @@
           self.rec = null;
           var blob = new Blob(self.chunks, { type: mr.mimeType || 'audio/webm' });
           var url = URL.createObjectURL(blob);
-          var take = { id: Store.uid('vo'), name: 'Take ' + (project.voiceovers.length + 1), url: url, volume: 0.9, buffer: null };
+          var take = { id: Store.uid('vo'), name: 'Take ' + ((project && project.voiceovers ? project.voiceovers.length : 0) + 1), url: url, volume: 0.9, buffer: null };
           Store.mediaCache.set(take.id, url);
           blob.arrayBuffer().then(function (ab) { return ac().decodeAudioData(ab); }).then(function (buf) {
             take.buffer = buf;
           }).catch(function () {});
-          project.voiceovers.push(take);
-          Store.snapshot(); Store.persist();
+          if (project && project.voiceovers) {
+            project.voiceovers.push(take);
+            Store.snapshot(); Store.persist();
+          }
           resolve(take);
         };
-        mr.stop();
+        try { mr.stop(); } catch (e) {
+          // recorder already inactive — release mic and bail out cleanly
+          self.rec = null;
+          if (self._stream) { try { self._stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e2) {} self._stream = null; }
+          resolve(null);
+        }
       });
     },
     remove: function (project, id) {

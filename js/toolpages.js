@@ -10,22 +10,22 @@
 
   /* ---------- actions (reuse real app functionality, nothing faked) ---------- */
   function openEditor() {
-    if (window.Store && Store.current) Editor.open(Store.current.id);
+    if (window.Editor && window.Store && Store.current) Editor.open(Store.current.id);
     else if (window.Projects) Projects.newProjectDialog();
   }
   function needProject(panel, hint) {
     return function () {
-      if (window.Store && Store.current) {
+      if (window.Store && Store.current && window.Editor) {
         if (panel && window.App) App.deepLink = { panel: panel };
         Editor.open(Store.current.id);
       } else {
         toast(hint || 'Open a project first — this tool lives in the editor.');
-        App.show('screen-projects');
+        if (window.App) App.show('screen-projects');
       }
     };
   }
   function openTemplates() {
-    App.show('screen-templates');
+    if (window.App) App.show('screen-templates');
     try { if (window.TXBrowse) TXBrowse.render(); } catch (e) { toast('Templates failed to load.', true); }
   }
 
@@ -151,14 +151,14 @@
       this._stack.push({ catId: catId });
       if (this._stack.length > 10) this._stack.shift();
       render();
-      App.show('screen-toolpage');
+      if (window.App) App.show('screen-toolpage');
     },
     back: function () {
       this._stack.pop();
       if (!this._stack.length) {
         // Go directly home — App.back() history can loop between tool pages
         this._stack = [];
-        App.show('screen-home');
+        if (window.App) App.show('screen-home');
         return;
       }
       render();

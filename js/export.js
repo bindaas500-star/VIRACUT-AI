@@ -131,7 +131,8 @@
           t += dt;
           if (t >= total) { t = total; finish(false); return; }
           driveVideos();
-          Editor.composite(g, size.w, size.h, t, true);
+          try { Editor.composite(g, size.w, size.h, t, true); }
+          catch (e) { failExport(e); return; }
           watermark();
           if (onProgress) { try { onProgress(t / total); } catch (e) {} }
           requestAnimationFrame(frame);
@@ -139,9 +140,11 @@
         function finish(cancelled) {
           finished = true;
           if (!cancelled) {
-            driveVideos();
-            Editor.composite(g, size.w, size.h, total - 0.03, true);
-            watermark();
+            try {
+              driveVideos();
+              Editor.composite(g, size.w, size.h, total - 0.03, true);
+              watermark();
+            } catch (e) { failExport(e); return; }
           }
           if (onProgress) { try { onProgress(1); } catch (e) {} }
           setTimeout(function () {
@@ -155,6 +158,14 @@
               else resolve({ url: url, blob: blob, size: size, fps: fps, vbps: vbps });
             });
           }, 400);
+        }
+        function failExport(e) {
+          finished = true;
+          try { rec.stop(); } catch (e2) {}
+          stopped.then(function () {
+            cleanup();
+            reject(new Error('Export failed while rendering: ' + (e && e.message ? e.message : e)));
+          });
         }
         function cleanup() {
           self.exporting = false;

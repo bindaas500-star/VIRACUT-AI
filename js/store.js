@@ -60,7 +60,10 @@
       return found;
     },
     getProjects: function () {
-      try { return JSON.parse(localStorage.getItem(LS_PROJECTS) || '[]'); }
+      try {
+        var v = JSON.parse(localStorage.getItem(LS_PROJECTS) || '[]');
+        return Array.isArray(v) ? v : [];
+      }
       catch (e) { return []; }
     },
     _saveAll: function (list) {
@@ -116,7 +119,9 @@
     pushHistory: function () {
       if (!this.current) return;
       this.history = this.history.slice(0, this.hIndex + 1);
-      this.history.push(clone(this.current));
+      var snap;
+      try { snap = clone(this.current); } catch (e) { return; }
+      this.history.push(snap);
       if (this.history.length > 60) this.history.shift();
       this.hIndex = this.history.length - 1;
     },
@@ -145,7 +150,7 @@
     _relinkMedia: function () {
       if (!this.current) return;
       var self = this;
-      this.current.clips.forEach(function (c) {
+      if (Array.isArray(this.current.clips)) this.current.clips.forEach(function (c) {
         var u = self.mediaCache.get(c.id);
         if (u) c.url = u;
       });
@@ -153,22 +158,22 @@
         var m = self.mediaCache.get('music_' + this.current.id);
         if (m) this.current.music.url = m;
       }
-      var self2 = this;
-      this.current.voiceovers.forEach(function (v) {
-        var u = self2.mediaCache.get(v.id);
+      if (Array.isArray(this.current.voiceovers)) this.current.voiceovers.forEach(function (v) {
+        var u = self.mediaCache.get(v.id);
         if (u) v.url = u;
       });
     },
 
     /* ---------- timing ---------- */
     clipPlayDur: function (clip) {
+      if (!clip) return 0.1;
       var d = Math.max(0.1, (clip.out - clip.in)) / (clip.speed || 1);
       return d;
     },
     timing: function () {
       // returns [{clip,start,end}] and total
       var t = 0, out = [];
-      if (!this.current) return { items: [], total: 0 };
+      if (!this.current || !Array.isArray(this.current.clips)) return { items: [], total: 0 };
       this.current.clips.forEach(function (c) {
         var d = Store.clipPlayDur(c);
         out.push({ clip: c, start: t, end: t + d });

@@ -11,18 +11,22 @@
 
   function readLS(k, fb) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } }
   function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function readObj(k, fb) {
+    var v = readLS(k, fb);
+    return (v && typeof v === 'object') ? v : fb;
+  }
 
   window.Settings = {
     version: VERSION,
     get: function (k, fb) {
-      var s = readLS(LS, {});
+      var s = readObj(LS, {});
       return (k in s) ? s[k] : fb;
     },
     set: function (k, v) {
-      var s = readLS(LS, {});
+      var s = readObj(LS, {});
       s[k] = v; writeLS(LS, s);
     },
-    profile: function () { return readLS(PROFILE_LS, { name: '', avatar: '' }); },
+    profile: function () { return readObj(PROFILE_LS, { name: '', avatar: '' }); },
     saveProfile: function (p) { writeLS(PROFILE_LS, p); },
     clearAllLocal: function () {
       Object.keys(localStorage).forEach(function (k) {
@@ -32,6 +36,9 @@
   };
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+  // i18n `t()` lives in i18n.js; fall back to the key if it failed to load
+  function t(k) { return (typeof window.t === 'function') ? window.t(k) : k; }
 
   function row(label, sub, right) {
     return '<button class="set-row" data-act="' + label.act + '">' +
@@ -61,7 +68,9 @@
 
   window.SettingsScreen = {
     render: function () {
-      var lang = I18N.lang();
+      var scr = document.getElementById('screen-settings');
+      if (!scr) return;
+      var lang = (window.I18N && typeof I18N.lang === 'function') ? I18N.lang() : 'en';
       var ending = Settings.get('defaultEnding', false);
       var prof = Settings.profile();
       var cacheKB = 0;
@@ -69,7 +78,7 @@
         var rc = localStorage.getItem('viracut_tx_remote_v1') || '';
         cacheKB = Math.round(rc.length / 1024);
       } catch (e) {}
-      var scr = document.getElementById('screen-settings');
+      if (!scr) return;
       scr.innerHTML =
         '<button class="back-btn" id="setBack">' + t('btn.back') + '</button>' +
         '<h2 class="page-title">' + t('set.title') + '</h2>' +
