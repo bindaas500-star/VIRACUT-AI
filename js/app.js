@@ -235,7 +235,7 @@
         var t = ((now - t0) / 1000) % total;
         var idx = Math.min(self.imgs.length - 1, Math.floor(t / self.dur));
         var im = self.imgs[idx];
-        if (!im.complete || !im.naturalWidth) return;
+        if (!im || !im.complete || !im.naturalWidth) return;
         var pr = (t - idx * self.dur) / self.dur;
         var W = cv.width, H = cv.height;
         var s = Math.max(W / im.naturalWidth, H / im.naturalHeight);
