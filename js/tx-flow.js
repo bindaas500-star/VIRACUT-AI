@@ -148,6 +148,7 @@
   /* ---------- media (centered coords) ---------- */
   function drawCoverAnim(g, media, W, H, anim, pr) {
     var sw = media.sw, sh = media.sh;
+    if (!sw || !sh) return; // media not measured yet — skip instead of drawing Inf
     var s = Math.max(W / sw, H / sh), z = 1, dx = 0;
     if (anim === 'kenburns-in') z = 1 + 0.15 * pr;
     else if (anim === 'kenburns-out') z = 1.15 - 0.15 * pr;
@@ -338,6 +339,7 @@
     render: function () {
       TXThumb.clear();
       var scr = document.getElementById('screen-templates');
+      if (!scr) return;
       var backBtn = scr.querySelector(':scope > .vc-back');
       scr.innerHTML =
         '<h2 style="margin:0 0 2px">' + t('tpl.title') + '</h2>' +
@@ -386,6 +388,7 @@
     sections: function () {
       TXThumb.clear();
       var host = document.getElementById('txSections');
+      if (!host) return; // render() never ran or screen rebuilt — remote-callback race
       host.innerHTML = '';
       function match(t) {
         var okC = txCat === 'all' || t.category === txCat;
@@ -462,9 +465,10 @@
     open: function (id) {
       var tpl = TX.get(id);
       if (!tpl) { toast('Template not found.', true); return; }
+      var scr = document.getElementById('screen-txdetail');
+      if (!scr) return;
       this.stop();
       dtTpl = tpl; dtOvl = ovlPartsFor(tpl); dtStarts = startsFor(tpl);
-      var scr = document.getElementById('screen-txdetail');
       var cat = TX.categories().filter(function (c) { return c.id === tpl.category; })[0];
       var liked = window.TXStats && TXStats.liked(tpl.id);
       var uses = window.TXStats ? fmtNum(TXStats.displayUses(tpl.id)) : '';

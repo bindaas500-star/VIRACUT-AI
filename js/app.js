@@ -7,6 +7,7 @@
   /* ================= toast ================= */
   function toast(msg, isErr) {
     var root = document.getElementById('toastRoot');
+    if (!root) return;
     var d = document.createElement('div');
     d.className = 'toast' + (isErr ? ' err' : '');
     d.textContent = msg;
@@ -23,12 +24,14 @@
     bg.className = 'modal-bg'; bg.id = 'modalBg';
     bg.innerHTML = '<div class="modal">' + html + '</div>';
     bg.addEventListener('click', function (e) { if (e.target === bg) closeModal(); });
-    document.getElementById('modalRoot').appendChild(bg);
+    var mr = document.getElementById('modalRoot');
+    if (!mr) return;
+    mr.appendChild(bg);
     if (wire) wire(bg);
     var inp = bg.querySelector('input[type=text],textarea');
     if (inp) setTimeout(function () { try { inp.focus(); } catch (e) {} }, 100);
   }
-  function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+  function closeModal() { var mr = document.getElementById('modalRoot'); if (mr) mr.innerHTML = ''; }
   function confirmDlg(msg, cb) {
     modal('<h3>Confirm</h3><p style="font-size:14px;margin-bottom:6px">' + esc(msg) + '</p>' +
       '<div class="row"><button class="btn danger" id="cfY" style="flex:1">Yes</button>' +
@@ -53,7 +56,8 @@
     toast('Opening ' + (provider === 'google' ? 'Google' : 'Facebook') + '…');
     var p = provider === 'google' ? Auth.signInWithGoogle() : Auth.signInWithFacebook();
     p.then(function (u) {
-      toast('Welcome, ' + u.name.split(' ')[0] + '!');
+      var nm = (u && u.name) ? String(u.name).split(' ')[0] : 'there';
+      toast('Welcome, ' + nm + '!');
       renderProfile(); renderHome();
     }).catch(function (e) {
       if (e && e.cancelled) return; // user closed the popup — stay silent
@@ -82,7 +86,8 @@
       document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
       var el = document.getElementById(id);
       if (el) el.classList.add('active');
-      document.getElementById('screens').scrollTop = 0;
+      var scrn = document.getElementById('screens');
+      if (scrn) scrn.scrollTop = 0;
       document.querySelectorAll('#bottomnav button').forEach(function (b) {
         b.classList.toggle('active', b.getAttribute('data-nav') === id);
       });
@@ -120,6 +125,7 @@
     modal: modal, closeModal: closeModal, confirm: confirmDlg,
     refreshPlanBadge: function () {
       var b = document.getElementById('planBadge');
+      if (!b) return;
       var pro = Plans.isPro();
       b.textContent = pro ? 'PRO' : 'FREE';
       b.className = 'plan-badge ' + (pro ? 'pro' : 'free');
@@ -150,21 +156,25 @@
   }
   function renderHome() {
     var g = document.getElementById('homeGrid');
-    g.innerHTML = '';
-    HOME_BTNS.forEach(function (b) {
-      var d = document.createElement('button');
-      d.className = 'home-btn';
-      d.innerHTML = '<span class="hb-ic">' + b.ic + '</span><span>' + b.t + '</span><small>' + b.s + '</small>';
-      d.onclick = b.go;
-      g.appendChild(d);
-    });
+    if (g) {
+      g.innerHTML = '';
+      HOME_BTNS.forEach(function (b) {
+        var d = document.createElement('button');
+        d.className = 'home-btn';
+        d.innerHTML = '<span class="hb-ic">' + b.ic + '</span><span>' + b.t + '</span><small>' + b.s + '</small>';
+        d.onclick = b.go;
+        g.appendChild(d);
+      });
+    }
     var u = Auth.user();
-    document.getElementById('homeGreet').textContent = u ? 'Hi ' + u.name.split(' ')[0] + ' — create something viral ✦' : 'Create something viral ✦';
+    var gr = document.getElementById('homeGreet');
+    if (gr) gr.textContent = u ? 'Hi ' + u.name.split(' ')[0] + ' — create something viral ✦' : 'Create something viral ✦';
   }
 
   /* ================= CREATE HUB ================= */
   function renderCreate() {
     var box = document.getElementById('createOptions');
+    if (!box) return;
     var opts = [
       { ic: '🎬', t: 'New video project', s: 'Import clips & edit on the timeline', go: function () { Projects.newProjectDialog(); } },
       { ic: '📸', t: 'Photo editor', s: 'Adjust, filters, crop & export', go: function () { if (window.PhotoUI) PhotoUI.importDialog(); } },
@@ -191,6 +201,7 @@
   /* ================= AI TOOLS HUB ================= */
   function renderAITools() {
     var box = document.getElementById('aiToolsList');
+    if (!box) return;
     var tools = [
       { ic: '✨', t: 'AI Video Generator', s: 'Prompt → video', tag: 'needs API', go: function () { App.show('screen-aivideo'); } },
       { ic: '✍️', t: 'AI Story', s: 'Idea → title, story, scenes, script', tag: 'offline ✓', go: function () { App.show('screen-aistory'); } },
@@ -215,8 +226,9 @@
     startPreview: function () {
       var self = this;
       this.stopPreview();
-      this.imgs = this.photos.map(function (p) { var im = new Image(); im.src = p.url; return im; });
       var cv = document.getElementById('pvCanvas');
+      if (!cv) return;
+      this.imgs = this.photos.map(function (p) { var im = new Image(); if (p && p.url) im.src = p.url; return im; });
       var dims = this.aspect === '16:9' ? [480, 270] : this.aspect === '1:1' ? [420, 420] : [360, 640];
       cv.width = dims[0]; cv.height = dims[1];
       cv.style.aspectRatio = dims[0] + ' / ' + dims[1];
@@ -249,6 +261,7 @@
     },
     renderList: function () {
       var self = this, box = document.getElementById('pvList');
+      if (!box) return;
       box.innerHTML = '';
       this.photos.forEach(function (p, i) {
         var d = document.createElement('div');
@@ -275,31 +288,35 @@
   };
   window.PV = PV;
   function initPhotoVideo() {
-    document.getElementById('pvPick').onclick = function () { document.getElementById('pvInput').click(); };
-    document.getElementById('pvInput').onchange = function (e) {
+    function on(id, ev, fn) { var e = document.getElementById(id); if (e) e[ev] = fn; }
+    on('pvPick', 'onclick', function () { var pi = document.getElementById('pvInput'); if (pi) pi.click(); });
+    on('pvInput', 'onchange', function (e) {
       Array.prototype.forEach.call(e.target.files, function (f) {
         PV.photos.push({ url: URL.createObjectURL(f), name: f.name });
       });
       e.target.value = '';
       PV.renderList(); PV.startPreview();
-    };
-    document.getElementById('pvDurMinus').onclick = function () { PV.dur = Math.max(1, PV.dur - 1); document.getElementById('pvDurVal').textContent = PV.dur; };
-    document.getElementById('pvDurPlus').onclick = function () { PV.dur = Math.min(10, PV.dur + 1); document.getElementById('pvDurVal').textContent = PV.dur; };
-    document.getElementById('pvKenburns').onchange = function (e) { PV.kb = e.target.checked; };
+    });
+    on('pvDurMinus', 'onclick', function () { PV.dur = Math.max(1, PV.dur - 1); var d = document.getElementById('pvDurVal'); if (d) d.textContent = PV.dur; });
+    on('pvDurPlus', 'onclick', function () { PV.dur = Math.min(10, PV.dur + 1); var d = document.getElementById('pvDurVal'); if (d) d.textContent = PV.dur; });
+    on('pvKenburns', 'onchange', function (e) { PV.kb = e.target.checked; });
     var ab = document.getElementById('pvAspect');
+    if (!ab) { PV.renderList(); return; }
     ['9:16', '16:9', '1:1'].forEach(function (a) {
       var b = document.createElement('button');
       b.className = 'pill' + (PV.aspect === a ? ' on' : ''); b.textContent = a;
       b.onclick = function () { PV.aspect = a; ab.querySelectorAll('.pill').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); PV.startPreview(); };
       ab.appendChild(b);
     });
-    document.getElementById('pvSend').onclick = function () { PV.sendToEditor(); };
+    on('pvSend', 'onclick', function () { PV.sendToEditor(); });
     PV.renderList();
   }
 
   /* ================= AI STORY screen ================= */
   function initAIStory() {
     var lg = document.getElementById('asLang');
+    var genBtn = document.getElementById('asGenerate');
+    if (!lg || !genBtn) return;
     var lang = 'en';
     [['en', 'English'], ['ur', 'اردو']].forEach(function (l) {
       var b = document.createElement('button');
@@ -307,8 +324,9 @@
       b.onclick = function () { lang = l[0]; lg.querySelectorAll('.pill').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); };
       lg.appendChild(b);
     });
-    document.getElementById('asGenerate').onclick = function () {
-      var idea = document.getElementById('asIdea').value.trim();
+    genBtn.onclick = function () {
+      var ideaEl = document.getElementById('asIdea');
+      var idea = ideaEl ? ideaEl.value.trim() : '';
       if (!idea) { toast('Type your idea first.', true); return; }
       var story;
       try { story = AIStory.generate(idea, lang); }
@@ -318,12 +336,15 @@
   }
   function renderStoryResult(story) {
     var box = document.getElementById('asResult');
+    if (!box) return;
+    story = story || {};
+    var scenes = story.scenes || [];
     function esc2(s) { return esc(s); }
     var html = '<div class="story-block"><h4>📌 TITLE</h4><p><b>' + esc2(story.title) + '</b></p></div>' +
       '<div class="story-block"><h4>🪝 HOOK</h4><p>' + esc2(story.hook) + '</p></div>' +
       '<div class="story-block"><h4>📖 STORY</h4><p>' + esc2(story.story) + '</p></div>' +
       '<div class="story-block"><h4>🎬 SCENES</h4>' +
-      story.scenes.map(function (s) {
+      scenes.map(function (s) {
         return '<div class="scene"><b>Scene ' + s.n + '</b><p>🎥 ' + esc2(s.visual) + '</p><p>🎙 ' + esc2(s.voice) + '</p></div>';
       }).join('') + '</div>' +
       '<div class="story-block"><h4>🎙 VOICEOVER SCRIPT</h4><p>' + esc2(story.script) + '</p></div>' +
@@ -334,8 +355,9 @@
     box.querySelector('#asFull').onclick = function () {
       try {
         var p = AIStory.buildProject(story, '9:16');
+        if (!p || !p.id) { toast('Could not build project.', true); return; }
         toast('Project created: ' + p.name);
-        Editor.open(p.id);
+        if (window.Editor) Editor.open(p.id);
       } catch (e) { toast('Could not build project: ' + e.message, true); }
     };
     box.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -344,8 +366,9 @@
   /* ================= AI VOICEOVER screen ================= */
   var VO_LANGS = [['ur', 'Urdu', 'ur'], ['en', 'English', 'en-US'], ['ar', 'Arabic', 'ar-SA']];
   function initAIVoice() {
+    function on(id, ev, fn) { var e = document.getElementById(id); if (e) e[ev] = fn; }
     var box = document.getElementById('voLang'), lang = 'ur';
-    VO_LANGS.forEach(function (l) {
+    if (box) VO_LANGS.forEach(function (l) {
       var b = document.createElement('button');
       b.className = 'pill' + (lang === l[0] ? ' on' : ''); b.textContent = l[1];
       b.onclick = function () { lang = l[0]; box.querySelectorAll('.pill').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on'); };
@@ -359,8 +382,9 @@
       return null;
     }
     if (window.speechSynthesis) speechSynthesis.getVoices();
-    document.getElementById('voPreview').onclick = function () {
-      var t = document.getElementById('voText').value.trim();
+    on('voPreview', 'onclick', function () {
+      var vt = document.getElementById('voText');
+      var t = vt ? vt.value.trim() : '';
       if (!t) { toast('Type a script first.', true); return; }
       if (!window.speechSynthesis) { toast('Speech not supported on this device.', true); return; }
       speechSynthesis.cancel();
@@ -369,22 +393,26 @@
       u.lang = bcp;
       var v = pickVoice(bcp); if (v) u.voice = v;
       speechSynthesis.speak(u);
-    };
-    document.getElementById('voStop').onclick = function () { try { speechSynthesis.cancel(); } catch (e) {} };
-    document.getElementById('voSave').onclick = function () {
-      var t = document.getElementById('voText').value.trim();
+    });
+    on('voStop', 'onclick', function () { try { speechSynthesis.cancel(); } catch (e) {} });
+    on('voSave', 'onclick', function () {
+      var vt2 = document.getElementById('voText');
+      var t = vt2 ? vt2.value.trim() : '';
       if (!t) { toast('Type a script first.', true); return; }
       var p = Store.current || Store.newProject('Voiceover Project', '9:16');
       p.script = t;
       Store.snapshot(); Store.persist();
-      document.getElementById('voSaved').innerHTML = '<div class="note-card">💾 Saved to project <b>' + esc(p.name) + '</b> — use “Auto from script” in Editor → Captions.</div>';
+      var vs = document.getElementById('voSaved');
+      if (vs) vs.innerHTML = '<div class="note-card">💾 Saved to project <b>' + esc(p.name) + '</b> — use “Auto from script” in Editor → Captions.</div>';
       toast('Script saved to project.');
-    };
+    });
   }
 
   /* ================= TRENDING ================= */
   function initTrending() {
+    if (!window.Trending || !Trending.CATEGORIES || !Trending.CATEGORIES.length) return;
     var chips = document.getElementById('trendChips');
+    if (!chips) return;
     Trending.CATEGORIES.forEach(function (c, i) {
       var b = document.createElement('button');
       b.className = 'chip' + (i === 0 ? ' on' : ''); b.textContent = c.icon + ' ' + c.name;
@@ -399,14 +427,17 @@
   }
   function renderTrendIdeas(catId) {
     var box = document.getElementById('trendList');
+    if (!box) return;
+    var ideas = (window.Trending && typeof Trending.ideas === 'function') ? (Trending.ideas(catId) || []) : [];
     box.innerHTML = '';
-    Trending.ideas(catId).forEach(function (idea) {
+    ideas.forEach(function (idea) {
       var d = document.createElement('div');
       d.className = 'list-item';
       d.innerHTML = '<b>' + esc(idea.title) + '</b><p class="muted" style="margin-top:4px">' + esc(idea.hook) + '</p>' +
         '<div class="row"><button class="btn ghost sm">✍️ Use in AI Story</button></div>';
       d.querySelector('button').onclick = function () {
-        document.getElementById('asIdea').value = idea.idea;
+        var ai = document.getElementById('asIdea');
+        if (ai) ai.value = idea.idea;
         App.show('screen-aistory');
         toast('Idea loaded — hit Generate Story.');
       };
@@ -416,15 +447,20 @@
 
   /* ================= SOCIAL KIT ================= */
   function renderSocial(project) {
-    var k = SocialKit.generate(project);
-    document.getElementById('socialSub').textContent = 'For: ' + k.title;
+    if (!window.SocialKit || typeof SocialKit.generate !== 'function') { toast('Social Kit unavailable.', true); return; }
+    var k = SocialKit.generate(project) || {};
+    var sub = document.getElementById('socialSub');
+    if (sub) sub.textContent = 'For: ' + (k.title || '');
     var box = document.getElementById('socialKit');
+    if (!box) return;
     box.innerHTML = '';
+    var tags = Array.isArray(k.hashtags) ? k.hashtags : [];
+    var thumbs = Array.isArray(k.thumbs) ? k.thumbs : [];
     var blocks = [
       ['📺 YouTube Shorts title', k.ytTitle], ['🎵 TikTok caption', k.tiktok],
       ['📸 Instagram Reels caption', k.ig], ['📝 Description', k.description],
-      ['#️⃣ Hashtags', k.hashtags.join(' ')],
-      ['🖼 Thumbnail text options', k.thumbs.join('\n')]
+      ['#️⃣ Hashtags', tags.join(' ')],
+      ['🖼 Thumbnail text options', thumbs.join('\n')]
     ];
     blocks.forEach(function (b) {
       var d = document.createElement('div');
@@ -451,6 +487,7 @@
   function renderProfile() {
     var u = Auth.user();
     var pc = document.getElementById('profileCard');
+    if (!pc) return;
     if (u) {
       var pic = u.picture ? '<img src="' + esc(u.picture) + '" alt="" style="width:46px;height:46px;border-radius:50%;object-fit:cover">' : '<span style="font-size:34px">👤</span>';
       var prov = u.provider === 'google' ? '<span class="tag">Google</span>' : u.provider === 'facebook' ? '<span class="tag">Facebook</span>' : '<span class="tag">demo</span>';
@@ -469,11 +506,13 @@
       if (f) f.onclick = function () { oauthSignIn('facebook'); };
     }
     var pro = Plans.isPro();
-    document.getElementById('planCard').innerHTML =
+    var plc = document.getElementById('planCard');
+    if (plc) plc.innerHTML =
       '<div class="kv"><span><b>' + (pro ? '⭐ Pro' : 'Free plan') + '</b><br><span class="muted">' + esc(Plans.describe()) + '</span></span></div>' +
       '<div class="kv"><span>Export quality</span><b>' + (pro ? '1080p' : '720p') + (pro ? '' : ' · watermark') + '</b></div>' +
       '<div class="kv"><span>AI generations today</span><b>' + (pro ? 'unlimited' : Plans.aiUsedToday() + ' / ' + Plans.FREE_DAILY_AI) + '</b></div>';
     var go = document.getElementById('btnGoPro');
+    if (!go) return;
     go.textContent = pro ? '⬇ Downgrade to Free (Demo)' : '⭐ Go Pro (Demo)';
     go.onclick = function () {
       if (Plans.isPro()) {
@@ -490,7 +529,8 @@
           });
       }
     };
-    document.getElementById('btnSignOut').onclick = function () {
+    var so = document.getElementById('btnSignOut');
+    if (so) so.onclick = function () {
       Auth.signOut(); toast('Signed out.'); renderProfile(); renderHome();
     };
     var bs = document.getElementById('btnSettings');
@@ -499,8 +539,9 @@
 
   /* ================= EDITOR chrome ================= */
   function initEditorChrome() {
-    document.getElementById('edBack').onclick = function () { Editor.teardown(); App.show('screen-projects'); };
-    document.getElementById('edName').onclick = function () {
+    function on(id, ev, fn) { var e = document.getElementById(id); if (e) e[ev] = fn; }
+    on('edBack', 'onclick', function () { Editor.teardown(); App.show('screen-projects'); });
+    on('edName', 'onclick', function () {
       var p = Editor.project; if (!p) return;
       modal('<h3>Rename</h3><input type="text" id="enV" value="' + esc(p.name) + '">' +
         '<div class="row" style="margin-top:12px"><button class="btn primary" id="enOk" style="flex:1">Save</button><button class="btn ghost" id="enNo">Cancel</button></div>',
@@ -508,38 +549,38 @@
           root.querySelector('#enNo').onclick = closeModal;
           root.querySelector('#enOk').onclick = function () {
             var v = root.querySelector('#enV').value.trim();
-            if (v) { p.name = v; Store.snapshot(); Store.persist(); document.getElementById('edName').textContent = v; }
+            if (v) { p.name = v; Store.snapshot(); Store.persist(); var en = document.getElementById('edName'); if (en) en.textContent = v; }
             closeModal();
           };
         });
-    };
-    document.getElementById('edUndo').onclick = function () { Editor.doUndo(); };
-    document.getElementById('edRedo').onclick = function () { Editor.doRedo(); };
-    document.getElementById('edPlay').onclick = function () { Editor.toggle(); };
-    document.getElementById('edSearch').onclick = function () { toast('Search is not available in the editor yet.', true); };
-    document.getElementById('edAiUhd').onclick = function () { Editor.setTool('ai'); };
-    document.getElementById('edFileInput').onchange = function (e) {
+    });
+    on('edUndo', 'onclick', function () { Editor.doUndo(); });
+    on('edRedo', 'onclick', function () { Editor.doRedo(); });
+    on('edPlay', 'onclick', function () { Editor.toggle(); });
+    on('edSearch', 'onclick', function () { toast('Search is not available in the editor yet.', true); });
+    on('edAiUhd', 'onclick', function () { Editor.setTool('ai'); });
+    on('edFileInput', 'onchange', function (e) {
       Editor.stageFiles(e.target.files); e.target.value = '';
-    };
-    document.getElementById('edOverlayInput').onchange = function (e) {
+    });
+    on('edOverlayInput', 'onchange', function (e) {
       var f = e.target.files[0];
       if (f && Editor.project) Editor.commitOverlayFile(f);
       e.target.value = '';
-    };
-    document.getElementById('edFull').onclick = function () {
+    });
+    on('edFull', 'onclick', function () {
       var wrap = document.getElementById('edPreviewWrap');
       try {
         if (document.fullscreenElement) document.exitFullscreen();
-        else if (wrap.requestFullscreen) wrap.requestFullscreen();
+        else if (wrap && wrap.requestFullscreen) wrap.requestFullscreen();
         else toast('Fullscreen not supported on this device.', true);
       } catch (e) { toast('Fullscreen not supported on this device.', true); }
-    };
-    document.getElementById('edMusicInput').onchange = function (e) {
+    });
+    on('edMusicInput', 'onchange', function (e) {
       var f = e.target.files[0];
       if (f && Editor.project) AudioLab.Music.set(f, Editor.project);
       e.target.value = '';
-    };
-    document.getElementById('edExport').onclick = startExport;
+    });
+    on('edExport', 'onclick', startExport);
     document.addEventListener('visibilitychange', function () { if (document.hidden && Editor.playing) Editor.pause(); });
   }
 
@@ -557,8 +598,8 @@
     return mb >= 100 ? Math.round(mb) + ' MB' : mb.toFixed(1) + ' MB';
   }
   function startExport() {
-    if (Exporter.exporting) return;
-    var p = Editor.project;
+    if (!window.Exporter || Exporter.exporting) return;
+    var p = (window.Editor && Editor.project) || null;
     if (!p || !Store.timing().total) { toast('Add clips before exporting.', true); return; }
     var total = Store.timing().total;
     var sel = { res: '720p', fps: 30, q: 'Medium' };
@@ -600,7 +641,8 @@
   }
 
   function runExportNow(sel) {
-    var p = Editor.project;
+    var p = (window.Editor && Editor.project) || null;
+    if (!p) { closeModal(); return; }
     var size = exportSizeFor(sel.res, p.aspect);
     var opts = { size: size, fps: sel.fps, videoBps: EX_QUALITY[sel.q] };
     modal('<h3>⏳ Exporting…</h3>' +
@@ -629,10 +671,14 @@
   }
 
   function showExportResult(out, p) {
-    var fname = (p.name || 'viracut').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'viracut';
+    out = out || {};
+    var dims = out.size || {};
+    var sizeTxt = (dims.w || '?') + '×' + (dims.h || '?');
+    var blobSize = (out.blob && out.blob.size) ? fmtMB(out.blob.size) : '?';
+    var fname = ((p && p.name) || 'viracut').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'viracut';
     modal('<h3>✅ Export ready</h3>' +
-      '<video src="' + out.url + '" controls style="width:100%;border-radius:12px"></video>' +
-      '<p class="muted center">' + out.size.w + '×' + out.size.h + ' · ' + fmtMB(out.blob.size) + '</p>' +
+      '<video src="' + (out.url || '') + '" controls style="width:100%;border-radius:12px"></video>' +
+      '<p class="muted center">' + sizeTxt + ' · ' + blobSize + '</p>' +
       '<div class="stack" style="margin-top:12px">' +
       '<button class="btn primary block" id="exDl">⬇ Save to gallery</button>' +
       '<button class="btn ghost block" id="exShare">📤 Share</button>' +
@@ -642,7 +688,7 @@
         root.querySelector('#exDl').onclick = function () { Exporter.download(out.url, p.name); toast('Download started — check your gallery/downloads.'); };
         root.querySelector('#exShare').onclick = function () {
           var file = null;
-          try { file = new File([out.blob], fname + '.webm', { type: out.blob.type || 'video/webm' }); } catch (e) {}
+          try { if (out.blob) file = new File([out.blob], fname + '.webm', { type: out.blob.type || 'video/webm' }); } catch (e) {}
           if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
             navigator.share({ files: [file], title: p.name }).catch(function () {});
           } else {
@@ -673,16 +719,20 @@
         if (id === 'screen-templates') renderTemplates();
       };
     });
-    document.getElementById('btnNewProject2').onclick = function () { Projects.newProjectDialog(); };
-    document.getElementById('socialBack').onclick = function () {
+    var np2 = document.getElementById('btnNewProject2');
+    if (np2) np2.onclick = function () { Projects.newProjectDialog(); };
+    var sb = document.getElementById('socialBack');
+    if (sb) sb.onclick = function () {
       if (Store.current) Editor.open(Store.current.id); else App.show('screen-projects');
     };
-    renderHome(); renderCreate(); renderAITools();
-    initPhotoVideo(); initAIStory(); initAIVoice(); initTrending();
-    AIVideo.init();
-    initEditorChrome();
-    App.refreshPlanBadge();
-    Projects.render();
+    // one broken screen init must not kill the rest of boot
+    function safe(fn) { try { fn(); } catch (e) {} }
+    safe(renderHome); safe(renderCreate); safe(renderAITools);
+    safe(initPhotoVideo); safe(initAIStory); safe(initAIVoice); safe(initTrending);
+    safe(function () { if (window.AIVideo) AIVideo.init(); });
+    safe(initEditorChrome);
+    safe(App.refreshPlanBadge.bind(App));
+    safe(Projects.render);
     // resume last project context (not auto-open; just remember)
     var last = Store.lastOpenId();
     if (last) {

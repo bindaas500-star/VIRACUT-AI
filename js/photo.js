@@ -65,6 +65,11 @@
   /* ================= pixel pipeline ================= */
   // Build a 256-entry LUT from curve points [[x,y]...]
   function curveLUT(pts) {
+    if (!pts || pts.length < 2) { // degenerate: identity LUT, never crash
+      var idl = new Array(256), j;
+      for (j = 0; j < 256; j++) idl[j] = j;
+      return idl;
+    }
     var p = pts.slice().sort(function (a, b) { return a[0] - b[0]; });
     var lut = new Array(256), i, k = 0;
     for (i = 0; i < 256; i++) {
@@ -236,6 +241,14 @@
       PW = clone(P);
       PF.stamp(PW, P.filter.id, (P.filter.intensity == null ? 80 : P.filter.intensity) / 100);
     }
+    // heal params missing sub-objects (e.g. projects saved by older versions)
+    if (!PW.curves || !PW.hsl || !PW.colorBalance || !PW.crop) {
+      var PD = defaultParams();
+      if (!PW.curves) PW.curves = PD.curves;
+      if (!PW.hsl) PW.hsl = PD.hsl;
+      if (!PW.colorBalance) PW.colorBalance = PD.colorBalance;
+      if (!PW.crop) PW.crop = PD.crop;
+    }
     var ns = naturalSize(img);
     // 1. rotate/flip base
     var rot = ((P.rotate % 360) + 360) % 360;
@@ -350,13 +363,14 @@
     },
     // Export at chosen resolution. scale: 1 = original pixels (post-crop)
     renderExport: function (maxDim) {
+      if (!this.img) return null;
       var ns = naturalSize(this.img);
       var rot = ((this.params.rotate % 360) + 360) % 360;
       var bw = (rot === 90 || rot === 270) ? ns.h : ns.w;
       var bh = (rot === 90 || rot === 270) ? ns.w : ns.h;
       var cw = bw * this.params.crop.w, ch = bh * this.params.crop.h;
       var s = maxDim ? Math.min(1, maxDim / Math.max(cw, ch)) : 1;
-      return renderPhoto(this.img, this.params, Math.round(cw * s), Math.round(ch * s));
+      return renderPhoto(this.img, this.params, Math.max(1, Math.round(cw * s)), Math.max(1, Math.round(ch * s)));
     },
     // Render current image with arbitrary params at given size (for thumbnails).
     renderWith: function (P, w, h) {
@@ -397,6 +411,7 @@
   var PhotoProjects = {
     list: function () { return lsGet().sort(function (a, b) { return b.updated - a.updated; }); },
     save: function (id) {
+      if (!PL.img) return null;
       var items = lsGet();
       var thumb = PL.previewCanvas ? thumbOf(PL.previewCanvas) : null;
       var rec = {
@@ -424,6 +439,7 @@
         PL.commit('open project');
         if (window.PhotoUI) PhotoUI.refreshAll();
       };
+      im.onerror = function () { if (window.toast) window.toast('Could not load project image.', true); };
       im.src = rec.original;
       return rec;
     },

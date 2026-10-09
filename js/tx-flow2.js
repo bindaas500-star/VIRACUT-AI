@@ -8,11 +8,12 @@
   window.TXSlots = {
     open: function (id) {
       var tpl = TX.get(id);
-      if (!tpl) return;
+      if (!tpl) { toast('Template not found.', true); return; }
+      var scr = document.getElementById('screen-txslots');
+      if (!scr) return;
       slTpl = tpl; slSlots = [];
       for (var i = 1; i <= tpl.slots; i++) slSlots.push({ n: i, file: null, url: null, type: null });
-      slMood = tpl.music.mood || 'soft'; slMusicFile = null; slQuality = 720;
-      var scr = document.getElementById('screen-txslots');
+      slMood = (tpl.music && tpl.music.mood) || 'soft'; slMusicFile = null; slQuality = 720;
       scr.innerHTML =
         '<button class="back-btn" id="txSlBack">‹ Back</button>' +
         '<h2 class="page-title">📷 ' + esc(tpl.title) + '</h2>' +
@@ -137,8 +138,11 @@
   window.TXGen = {
     start: function (state) {
       if (genRunning) return;
-      genRunning = true; genFailed = null;
+      state = state || {};
       var tpl = state.tpl, C = TXCore;
+      var scr = document.getElementById('screen-txgen');
+      if (!tpl || !scr || !tpl.scenes || !tpl.scenes.length) { toast('Nothing to render.', true); return; }
+      genRunning = true; genFailed = null;
       TXGen._lastState = state;
       try { if (window.TXStats) TXStats.use(tpl.id); } catch (e) {}
       var _s = state.quality === 1080 ? 1080 : 720;
@@ -150,7 +154,6 @@
       if (endCard) total += END_DUR;
       var starts = C.startsFor(tpl);
 
-      var scr = document.getElementById('screen-txgen');
       scr.innerHTML =
         t('gen.title') +
         '<div class="tx-gen-wrap"><canvas id="txGenCanvas" width="216" height="384"></canvas>' +
@@ -184,10 +187,14 @@
       });
 
       var AC = window.AudioContext || window.webkitAudioContext;
-      var actx = new AC(), dest = actx.createMediaStreamDestination();
+      var actx = null, dest = null;
+      try {
+        if (AC) { actx = new AC(); dest = actx.createMediaStreamDestination(); }
+      } catch (e) { actx = null; dest = null; }
       var musicReady;
       try {
-        musicReady = state.musicFile
+        musicReady = !actx ? Promise.resolve(null)
+          : state.musicFile
           ? state.musicFile.arrayBuffer().then(function (b) { return actx.decodeAudioData(b); }).catch(function () { return null; })
           : TXMusic.buildLoop(state.musicMood || 'soft', total + 1);
       } catch (e) { musicReady = Promise.resolve(null); }
@@ -197,13 +204,16 @@
         new Promise(function (res) { setTimeout(function () { res(null); }, 12000); })
       ]);
 
+      if (typeof cv.captureStream !== 'function') { toast('Recording not supported on this device.', true); genRunning = false; return; }
       var stream = cv.captureStream(30);
       var mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].filter(function (m) {
         try { return window.MediaRecorder && MediaRecorder.isTypeSupported(m); } catch (e) { return false; }
       })[0] || '';
       var chunks = [], rec = null;
       try {
-        var combined = new MediaStream(stream.getVideoTracks().concat(dest.stream.getAudioTracks()));
+        var vtracks = stream.getVideoTracks();
+        if (dest) vtracks = vtracks.concat(dest.stream.getAudioTracks());
+        var combined = new MediaStream(vtracks);
         rec = new MediaRecorder(combined, mime ? { mimeType: mime, videoBitsPerSecond: 8000000 } : undefined);
       } catch (e) { toast('Recording not supported on this device.', true); genRunning = false; return; }
       rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
@@ -286,7 +296,7 @@
       musicReady.then(function (buf) {
         if (!genRunning) return;
         try {
-          if (buf) {
+          if (buf && actx && dest) {
             var src = actx.createBufferSource();
             src.buffer = buf; src.loop = true; src.connect(dest);
             try { src.start(0); } catch (e) {}
@@ -314,6 +324,7 @@
     },
     showResult: function (tpl, total, state) {
       var scr = document.getElementById('screen-txresult');
+      if (!scr) return;
       scr.innerHTML =
         '<button class="back-btn" id="txRsBack">‹ Templates</button>' +
         t('res.title') +
@@ -361,7 +372,8 @@
   }
   // FX dropdown options with 🔒 on Pro effects; returns '' for none.
   function fxOpts(cur) {
-    return FX.list().map(function (f) {
+    var list = (window.FX && FX.list) ? FX.list() : [];
+    return list.map(function (f) {
       return '<option value="' + f.id + '"' + (f.id === cur ? ' selected' : '') + '>' +
         f.icon + ' ' + esc(f.name) + (f.pro ? ' 🔒' : '') + '</option>';
     }).join('');
@@ -402,6 +414,7 @@
   window.TXCreate = {
     render: function () {
       var scr = document.getElementById('screen-txcreate');
+      if (!scr) return;
       scr.innerHTML =
         '<button class="back-btn" id="txCrBack">‹ Templates</button>' +
         '<h2 class="page-title">🛠️ Template Creator</h2>' +
@@ -557,9 +570,15 @@
     open: function () {
       var st = TXGen._lastState;
       if (!st || !st.tpl) { toast('Generate a video first.', true); return; }
+      var scr = document.getElementById('screen-txedit');
+      if (!scr) return;
       baseState = st;
       draft = JSON.parse(JSON.stringify(st.tpl));
-      var scr = document.getElementById('screen-txedit');
+      if (!draft.scenes || !draft.scenes.length) { toast('Template has no scenes.', true); return; }
+      draft.scenes.forEach(function (sc) {
+        sc.slot = Math.max(1, parseInt(sc.slot, 10) || 1);
+        if (typeof sc.dur !== 'number' || !(sc.dur > 0)) sc.dur = 1.2;
+      });
       scr.innerHTML =
         '<button class="back-btn" id="txEdBack">‹ Result</button>' +
         '<h2 class="page-title">🎬 Edit Template</h2>' +
