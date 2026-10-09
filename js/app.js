@@ -110,7 +110,11 @@
       b.className = 'vc-back icon-btn';
       b.innerHTML = '←';
       b.setAttribute('aria-label', 'Back');
-      b.onclick = function () { window.App.back(); };
+      b.onclick = function () {
+        // My Projects back always goes home — avoids Editor/Projects loop
+        if (id === 'screen-projects') window.App.show('screen-home');
+        else window.App.back();
+      };
       el.insertBefore(b, el.firstChild);
     },
     modal: modal, closeModal: closeModal, confirm: confirmDlg,
@@ -495,7 +499,7 @@
 
   /* ================= EDITOR chrome ================= */
   function initEditorChrome() {
-    document.getElementById('edBack').onclick = function () { Editor.teardown(); App.back(); };
+    document.getElementById('edBack').onclick = function () { Editor.teardown(); App.show('screen-projects'); };
     document.getElementById('edName').onclick = function () {
       var p = Editor.project; if (!p) return;
       modal('<h3>Rename</h3><input type="text" id="enV" value="' + esc(p.name) + '">' +
