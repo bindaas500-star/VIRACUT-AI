@@ -159,7 +159,12 @@
     },
     back: function () {
       this._stack.pop();
-      if (!this._stack.length) { App.back(); return; }
+      if (!this._stack.length) {
+        // Go directly home — App.back() history can loop between tool pages
+        this._stack = [];
+        App.show('screen-home');
+        return;
+      }
       render();
       var sc = document.getElementById('screens');
       if (sc) sc.scrollTop = 0;
