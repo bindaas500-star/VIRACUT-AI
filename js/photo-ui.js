@@ -99,7 +99,8 @@
     var inp = document.getElementById(cam ? 'phFileCam' : 'phFile');
     inp.onchange = function () {
       if (inp.files && inp.files[0]) {
-        loadImageFile(inp.files[0]).then(function (r) { openPhoto(r.img, r.name, r.url); });
+        loadImageFile(inp.files[0]).then(function (r) { openPhoto(r.img, r.name, r.url); },
+          function () { toast('Could not load that image.', true); });
         inp.value = '';
       }
     };
@@ -391,7 +392,8 @@
     var p = document.getElementById('phPanel');
     if (!p) return;
     p.innerHTML = '';
-    document.getElementById('phCropOver').style.display = UI.tool === 'crop' ? 'block' : 'none';
+    var _co = document.getElementById('phCropOver');
+    if (_co) _co.style.display = UI.tool === 'crop' ? 'block' : 'none';
     if (UI.tool === 'adjust') panelAdjust(p);
     else if (UI.tool === 'filters') panelFilters(p);
     else if (UI.tool === 'hsl') panelHSL(p);
@@ -715,23 +717,27 @@
   }
   // show full (uncropped) image under the crop box
   function enterCropBase() {
+    if (!lab().img) return; // no photo yet (e.g. camera cancelled) — nothing to draw under
+    var cv = document.getElementById('phCanvas');
+    if (!cv) return;
     var P2 = JSON.parse(JSON.stringify(lab().params));
     P2.crop = { x: 0, y: 0, w: 1, h: 1 };
     var ns = { w: lab().img.naturalWidth, h: lab().img.naturalHeight };
     var rot = ((P2.rotate % 360) + 360) % 360;
     var bw = (rot === 90 || rot === 270) ? ns.h : ns.w, bh = (rot === 90 || rot === 270) ? ns.w : ns.h;
     var s = Math.min(1, 1600 / Math.max(bw, bh));
-    var cv = document.getElementById('phCanvas');
-    var c = lab().renderWith(P2, Math.round(bw * s), Math.round(bh * s));
+    var c = lab().renderWith(P2, Math.max(1, Math.round(bw * s)), Math.max(1, Math.round(bh * s)));
     cv.width = c.width; cv.height = c.height;
     cv.getContext('2d').drawImage(c, 0, 0);
-    document.getElementById('phCropOver').style.display = 'block';
+    var _co2 = document.getElementById('phCropOver');
+    if (_co2) _co2.style.display = 'block';
   }
   function applyRatio(r) {
     var P = lab().params;
     if (r.r === 0) return; // free: keep current box
     var target = r.r;
     if (r.r === -1) { // original: full image aspect after rotation
+      if (!lab().img) return;
       var ns = { w: lab().img.naturalWidth, h: lab().img.naturalHeight };
       var rot = ((P.rotate % 360) + 360) % 360;
       target = ((rot === 90 || rot === 270) ? ns.h : ns.w) / ((rot === 90 || rot === 270) ? ns.w : ns.h);
@@ -850,6 +856,7 @@
     setTimeout(function () {
       var maxDim = sz.max || 0;
       var base = lab().renderExport(maxDim >= 4096 ? 4096 : maxDim);
+      if (!base) { toast('Export failed.', true); return; }
       var out = base;
       if (maxDim > 4096 || (maxDim && Math.max(base.width, base.height) < Math.max(est.w, est.h))) {
         // upscale step for 8K / large targets

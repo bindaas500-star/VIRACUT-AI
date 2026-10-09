@@ -14,6 +14,7 @@
 
   Editor.renderTools = function () {
     var self = this, el = document.getElementById('edTools');
+    if (!el) return;
     el.innerHTML = '';
     TOOLS.forEach(function (t) {
       var b = document.createElement('button');
@@ -46,7 +47,8 @@
   };
   Editor.setTool = function (id) {
     this.tool = id; this.placingSticker = null;
-    document.getElementById('edStickerLayer').style.pointerEvents = 'none';
+    var sl = document.getElementById('edStickerLayer');
+    if (sl) sl.style.pointerEvents = 'none';
     this.renderTools(); this.renderPanel(); this.renderClipStrip();
   };
 
@@ -54,18 +56,22 @@
     var el = document.getElementById('edPanel');
     var sheet = document.getElementById('edSheet');
     var backdrop = document.getElementById('edSheetBackdrop');
+    if (!el) return;
+    if (!this.project) { el.innerHTML = '<p class="hint">No project loaded.</p>'; return; }
     var fn = this['panel_' + this.tool];
     el.innerHTML = '';
     if (!fn) { this.closeSheet(); return; }
     fn.call(this, el);
-    sheet.style.display = 'flex';
-    backdrop.style.display = 'block';
+    if (sheet) sheet.style.display = 'flex';
+    if (backdrop) backdrop.style.display = 'block';
     this.updateUndoRedo();
   };
 
   Editor.closeSheet = function () {
-    document.getElementById('edSheet').style.display = 'none';
-    document.getElementById('edSheetBackdrop').style.display = 'none';
+    var sheet = document.getElementById('edSheet');
+    var backdrop = document.getElementById('edSheetBackdrop');
+    if (sheet) sheet.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
     if (window.FXTHUMBS) { try { FXTHUMBS.stopAll(); } catch (e) {} }
     if (this.tool) { this.tool = null; this.renderTools(); }
   };
@@ -93,7 +99,7 @@
     if (d) d.onclick = function () { self.deleteClip(); };
     if (dp) dp.onclick = function () { self.duplicateClip(); };
     // staging: preview before adding
-    if (this.staged.length) {
+    if ((this.staged || []).length) {
       var box = h('<h4 style="margin-top:12px">👀 Preview — add what you want</h4><div class="pv-grid" id="pvGrid"></div>' +
         '<div class="row" style="margin-top:8px"><button class="btn primary sm" id="pvAll">＋ Add all</button></div>');
       el.appendChild(box);
@@ -141,8 +147,9 @@
     var self = this, L = window.EditorLogic;
     var tg = this.kfTarget();
     if (!tg) { el.innerHTML = '<p class="hint">Select a clip, text, overlay or sticker first.</p>'; return; }
+    if (!L) { el.innerHTML = '<p class="hint">Keyframe engine not loaded.</p>'; return; }
     var kfs = tg.item.keyframes || [];
-    var cur = this.kfEffectiveProps(tg, this.t);
+    var cur = this.kfEffectiveProps(tg, this.t) || {};
     var isPx = (tg.kind === 'clip' || tg.kind === 'text');
     function srow(id, label, min, max, step, val, unit) {
       return '<div class="adj-row"><div class="lbl"><span>' + label + '</span><span id="' + id + 'V">' + val + unit + '</span></div>' +
@@ -278,7 +285,7 @@
     if (idx <= 0) { el.innerHTML = '<p class="hint">The first clip has no incoming transition — select a later clip or tap a ⋈ junction.</p>'; return; }
     var cur = c.transitionIn && c.transitionIn !== 'none' ? c.transitionIn : null;
     if (cur === 'crossfade') cur = { type: 'fade', dur: 0.5 };
-    var curType = cur ? cur.type : 'none', curDur = cur ? cur.dur : 0.5;
+    var curType = cur ? (cur.type || 'fade') : 'none', curDur = cur && cur.dur != null ? cur.dur : 0.5;
     var types = [
       { id: 'fade', label: '🌫️ Fade', desc: 'Cross-dissolve' },
       { id: 'slide', label: '➡️ Slide', desc: 'Push left' },
@@ -396,27 +403,28 @@
       return name.toLowerCase().indexOf(q) >= 0 || (sub || '').toLowerCase().indexOf(q) >= 0;
     }
     var items = [], i, def;
+    var VL = FXLIB.video || [], PL = FXLIB.photo || [], BL = FXLIB.body || [], AL = FXLIB.ai || [];
     if (this._fxCat === 'video') {
       // "None" tile first
       items.push({ id: '__none', name: 'None', icon: '🚫', none: true });
-      for (i = 0; i < FXLIB.video.length; i++) {
-        def = FXLIB.video[i];
+      for (i = 0; i < VL.length; i++) {
+        def = VL[i];
         if (this._fxSub && def.sub !== this._fxSub && q === '') continue;
         if (!match(def.name, def.sub)) continue;
         items.push(def);
       }
     } else if (this._fxCat === 'photo') {
-      for (i = 0; i < FXLIB.photo.length; i++) {
-        def = FXLIB.photo[i];
+      for (i = 0; i < PL.length; i++) {
+        def = PL[i];
         if (!match(def.name, '')) continue;
         items.push(def);
       }
     } else if (this._fxCat === 'body') {
-      for (i = 0; i < FXLIB.body.length; i++) { if (match(FXLIB.body[i].name, '')) items.push(FXLIB.body[i]); }
+      for (i = 0; i < BL.length; i++) { if (match(BL[i].name, '')) items.push(BL[i]); }
       // pre-load the free on-device segmentation model when Body tab opens
       if (window.BodyFX) { try { BodyFX.ensure(); } catch (e) {} }
     } else {
-      for (i = 0; i < FXLIB.ai.length; i++) { if (match(FXLIB.ai[i].name, '')) items.push(FXLIB.ai[i]); }
+      for (i = 0; i < AL.length; i++) { if (match(AL[i].name, '')) items.push(AL[i]); }
     }
     if (!items.length) {
       grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:18px">No effects match “' + esc(this._fxQuery) + '”. Try “blur”, “glitch” or “glow”.</p>';
@@ -504,11 +512,11 @@
     var def, params, title, onApply;
     if (pv) {
       def = FXLIB.get(pv.fxId); if (!def) return;
-      params = pv.params; title = def.name;
+      params = pv.params = pv.params || {}; title = def.name;
       onApply = function () { self._fxApplyPreview(); };
     } else {
       def = FXLIB.get(pp.fxId); if (!def) return;
-      params = pp.params; title = def.name + ' (photo)';
+      params = pp.params = pp.params || {}; title = def.name + ' (photo)';
       onApply = function () { self._fxApplyPhoto(); };
     }
     bar.style.display = 'block';
@@ -601,7 +609,7 @@
       name: def.name,
       start: start,
       dur: dur,
-      params: JSON.parse(JSON.stringify(pv.params))
+      params: JSON.parse(JSON.stringify(pv.params || {}))
     };
     this.project.effects = this.project.effects || [];
     this.project.effects.push(sg);
@@ -623,13 +631,13 @@
       var c = this.selClip();
       if (c && c.id === pp.id) {
         c.photoFx = pp.fxId;
-        c.photoFxParams = JSON.parse(JSON.stringify(pp.params));
+        c.photoFxParams = JSON.parse(JSON.stringify(pp.params || {}));
       }
     } else {
       var ov = (this.project.overlays || []).filter(function (o) { return o.id === pp.id; })[0];
       if (ov) {
         ov.photoFx = pp.fxId;
-        ov.photoFxParams = JSON.parse(JSON.stringify(pp.params));
+        ov.photoFxParams = JSON.parse(JSON.stringify(pp.params || {}));
       }
     }
     this._fxPhotoPreview = null;
@@ -646,8 +654,9 @@
     }
     if (!sg) { el.innerHTML = '<p class="hint">Select an effect segment first.</p>'; return; }
     var def = window.FXLIB ? FXLIB.get(sg.fxId) : null;
+    var s0 = (+sg.start || 0), sd = sg.dur != null ? +sg.dur : 0.5;
     el.appendChild(h('<h4>✨ ' + esc(sg.name || (def ? def.name : 'Effect')) + '</h4>' +
-      '<p class="muted">' + sg.start.toFixed(1) + 's – ' + (sg.start + sg.dur).toFixed(1) + 's · ' + sg.dur.toFixed(1) + 's long</p>'));
+      '<p class="muted">' + s0.toFixed(1) + 's – ' + (s0 + sd).toFixed(1) + 's · ' + sd.toFixed(1) + 's long</p>'));
     var sl = document.createElement('div');
     (def && def.params ? def.params : []).forEach(function (prm) {
       var row = document.createElement('div');
@@ -670,9 +679,9 @@
     var total = Store.timing().total;
     var dr = document.createElement('div');
     dr.className = 'adj-row';
-    dr.innerHTML = '<div class="lbl"><span>Duration</span><span class="val">' + sg.dur.toFixed(1) + 's</span></div>';
+    dr.innerHTML = '<div class="lbl"><span>Duration</span><span class="val">' + sd.toFixed(1) + 's</span></div>';
     var di = document.createElement('input');
-    di.type = 'range'; di.min = 0.5; di.max = Math.max(1, total - sg.start); di.step = 0.1; di.value = sg.dur;
+    di.type = 'range'; di.min = 0.5; di.max = Math.max(1, total - s0); di.step = 0.1; di.value = sd;
     di.addEventListener('input', function () {
       sg.dur = +di.value;
       dr.querySelector('.val').textContent = sg.dur.toFixed(1) + 's';
@@ -692,7 +701,7 @@
     };
     row2.querySelector('#fxDup').onclick = function () {
       var cp = JSON.parse(JSON.stringify(sg));
-      cp.id = Store.uid('fx'); cp.start = Math.min(total - 0.5, sg.start + sg.dur);
+      cp.id = Store.uid('fx'); cp.start = Math.max(0, Math.min(total - 0.5, sg.start + sg.dur));
       self.project.effects.push(cp);
       self.project.effects.sort(function (a, b) { return a.start - b.start; });
       self.selFxId = cp.id;
@@ -710,6 +719,7 @@
   Editor.panel_text = function (el) {
     var self = this, p = this.project;
     var total = Store.timing().total;
+    p.texts = p.texts || [];
     var d = h('<h4>🔤 Text overlays</h4><div id="txList"></div>' +
       '<div class="row" style="margin-top:8px"><button class="btn primary sm" id="txAdd">＋ Add text</button></div>');
     el.appendChild(d);
@@ -718,7 +728,7 @@
     p.texts.forEach(function (tx) {
       var row = document.createElement('div');
       row.className = 'kv';
-      row.innerHTML = '<span>' + esc(tx.text).slice(0, 28) + ' <span class="muted">(' + tx.start.toFixed(1) + '–' + tx.end.toFixed(1) + 's)</span></span>';
+      row.innerHTML = '<span>' + esc(tx.text).slice(0, 28) + ' <span class="muted">(' + (tx.start || 0).toFixed(1) + '–' + (tx.end != null ? tx.end : 0).toFixed(1) + 's)</span></span>';
       var del = document.createElement('button'); del.className = 'icon-btn'; del.textContent = '🗑'; del.title = 'Delete';
       del.onclick = function () { p.texts = p.texts.filter(function (x) { return x.id !== tx.id; }); self.snapshot(); Store.persist(); self.drawOnce(); self.renderPanel(); };
       var edt = document.createElement('button'); edt.className = 'icon-btn'; edt.textContent = '✎'; edt.title = 'Edit';
@@ -731,6 +741,7 @@
   Editor.textDialog = function (tx) {
     var self = this, p = this.project;
     var isNew = !tx;
+    p.texts = p.texts || [];
     var total = Store.timing().total || 10;
     var cur = tx || { text: '', position: 'mid', color: '#ffffff', size: 6, start: 0, end: total };
     App.modal(
@@ -816,8 +827,10 @@
   };
   Editor.renderStickers = function () {
     var self = this, layer = document.getElementById('edStickerLayer');
+    if (!layer) return;
     layer.innerHTML = '';
     layer.style.pointerEvents = this.placingSticker ? 'auto' : 'none';
+    this.project.stickers = this.project.stickers || [];
     this.project.stickers.forEach(function (s) {
       var d = document.createElement('div');
       d.className = 'stk'; d.textContent = s.emoji;
@@ -884,6 +897,7 @@
   /* ---------- CAPTIONS ---------- */
   Editor.panel_captions = function (el) {
     var self = this, p = this.project;
+    p.captions = p.captions || [];
     var d = h('<h4>💬 Captions</h4><div id="cpList"></div>' +
       '<div class="row" style="margin-top:8px"><button class="btn primary sm" id="cpAdd">＋ Add</button>' +
       '<button class="btn ghost sm" id="cpAuto">✨ Auto from script</button>' +
@@ -894,7 +908,7 @@
     p.captions.forEach(function (c) {
       var row = document.createElement('div');
       row.className = 'kv';
-      row.innerHTML = '<span>' + esc(c.text).slice(0, 34) + ' <span class="muted">(' + c.start.toFixed(1) + '–' + c.end.toFixed(1) + 's)</span></span>';
+      row.innerHTML = '<span>' + esc(c.text).slice(0, 34) + ' <span class="muted">(' + (c.start || 0).toFixed(1) + '–' + (c.end != null ? c.end : 0).toFixed(1) + 's)</span></span>';
       var del = document.createElement('button'); del.className = 'icon-btn'; del.textContent = '🗑';
       del.onclick = function () { Captions.remove(c.id); self.drawOnce(); self.renderPanel(); };
       row.appendChild(del); list.appendChild(row);
@@ -1026,7 +1040,9 @@
   Editor.renderAudioPanel = function (el) {
     var self = this, p = this.project;
     el = el || document.getElementById('edPanel');
+    if (!el) return;
     if (this.tool !== 'audio') return;
+    p.voiceovers = p.voiceovers || [];
     el.innerHTML = '';
     // ---- per-clip audio (volume / fade / mute / extract) ----
     var c = this.selClip();
@@ -1076,7 +1092,7 @@
     var mb = d.querySelector('#muBox');
     if (p.music) {
       mb.innerHTML = '<div class="kv"><span>🎵 ' + esc(p.music.name) + '</span><button class="icon-btn" id="muX">🗑</button></div>' +
-        '<label class="lbl">Music volume</label><input type="range" id="muV" min="0" max="100" value="' + Math.round(p.music.volume * 100) + '">';
+        '<label class="lbl">Music volume</label><input type="range" id="muV" min="0" max="100" value="' + Math.round((p.music.volume == null ? 1 : p.music.volume) * 100) + '">';
       mb.querySelector('#muX').onclick = function () { AudioLab.Music.clear(p); self.renderAudioPanel(); };
       mb.querySelector('#muV').oninput = function (e) { p.music.volume = e.target.value / 100; Store.persist(); };
     } else mb.innerHTML = '<p class="muted">No music yet.</p>';
@@ -1089,7 +1105,7 @@
       row.className = 'list-item';
       row.innerHTML = '<div class="kv"><span>🎙 ' + esc(v.name) + '</span><button class="icon-btn">🗑</button></div>' +
         (v.url ? '<audio controls src="' + v.url + '"></audio>' : '<p class="muted">encoding…</p>') +
-        '<label class="lbl">Volume</label><input type="range" min="0" max="100" value="' + Math.round(v.volume * 100 + '') + '">';
+        '<label class="lbl">Volume</label><input type="range" min="0" max="100" value="' + Math.round((v.volume == null ? 1 : v.volume) * 100) + '">';
       var btns = row.querySelectorAll('button');
       row.querySelector('input').oninput = function (e) { v.volume = e.target.value / 100; Store.persist(); };
       btns[0].onclick = function () { AudioLab.Voice.remove(p, v.id); self.renderAudioPanel(); };
@@ -1198,6 +1214,7 @@
   ];
   Editor.renderClipStrip = function () {
     var el = document.getElementById('edClipStrip');
+    if (!el) return;
     var c = this.selClip();
     this.renderKfBtn();
     // Phase 9: crop mode replaces the strip with Cancel/Apply
@@ -1412,6 +1429,7 @@
   /* ================= PANEL: OVERLAY ================= */
   Editor.panel_overlay = function (el) {
     var self = this, p = this.project;
+    p.overlays = p.overlays || [];
     var d = document.createElement('div');
     d.innerHTML = '<h4>🖼️ Overlays</h4>';
     if (!p.overlays.length) d.innerHTML += '<p class="muted">No overlays yet.</p>';
