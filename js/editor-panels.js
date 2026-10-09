@@ -413,6 +413,8 @@
       }
     } else if (this._fxCat === 'body') {
       for (i = 0; i < FXLIB.body.length; i++) { if (match(FXLIB.body[i].name, '')) items.push(FXLIB.body[i]); }
+      // pre-load the free on-device segmentation model when Body tab opens
+      if (window.BodyFX) { try { BodyFX.ensure(); } catch (e) {} }
     } else {
       for (i = 0; i < FXLIB.ai.length; i++) { if (match(FXLIB.ai[i].name, '')) items.push(FXLIB.ai[i]); }
     }
@@ -461,6 +463,13 @@
     if (it.unavailable === 'api') {
       toast('🤖 This AI effect needs a cloud API integration — coming in Phase 2.', true);
       return;
+    }
+    // body effects: free on-device AI — warn honestly while model downloads
+    if (this._fxCat === 'body' && window.BodyFX) {
+      var bs = BodyFX.status();
+      if (bs === 'loading') toast('🧍 Downloading free AI model… preview starts in a moment.');
+      else if (bs === 'failed') { toast('🧍 Model download failed — check internet and retry.', true); return; }
+      else BodyFX.ensure();
     }
     if (this._fxCat === 'photo') { this._fxPhotoTap(it); return; }
     // video effect → live preview
@@ -864,15 +873,104 @@
       var n = Captions.autoFromScript();
       if (n) { self.drawOnce(); self.renderPanel(); toast(n + ' captions created from script.'); }
     };
-    // Phase 11: honest auto-transcribe (needs speech-to-text API)
+    // Phase 13: FREE auto-transcribe via Web Speech API (on-device browser API,
+    // no paid service). Honest when unsupported (many WebViews lack it).
     var atBtn = document.createElement('button');
     atBtn.className = 'btn ghost sm'; atBtn.textContent = '🎙️ Auto-transcribe';
-    atBtn.style.opacity = '0.55';
-    atBtn.onclick = function () { toast('Auto captions need a speech-to-text API — not configured. Use manual captions or Auto from script.', true); };
+    if (window.AutoCap && AutoCap.isActive()) {
+      atBtn.textContent = '⏹ Stop transcribe';
+      atBtn.onclick = function () { self._autoCapStop(); };
+    } else if (window.AutoCap && AutoCap.supported()) {
+      atBtn.onclick = function () { self._autoCapStart(); };
+    } else {
+      atBtn.style.opacity = '0.55';
+      atBtn.onclick = function () { toast('🎙️ Speech recognition is not available in this browser/WebView — use manual captions or Auto from script.', true); };
+    }
     d.querySelector('.row').appendChild(atBtn);
     d.querySelector('#cpClear').onclick = function () {
       App.confirm('Clear all captions?', function (ok) { if (ok) { Captions.clear(); self.drawOnce(); self.renderPanel(); } });
     };
+  };
+
+  /* Phase 13: auto-transcribe session — plays project while mic listens.
+     Language picker first (English / اردو). Final transcripts become caption
+     blocks via Captions.add() (undo/redo safe). */
+  Editor._autoCapStart = function () {
+    var self = this;
+    if (!window.AutoCap || !AutoCap.supported()) {
+      toast('🎙️ Speech recognition is not available in this browser/WebView.', true);
+      return;
+    }
+    var tm = Store.timing();
+    if (!tm.total || !tm.items.length) { toast('Import media first — captions need a timeline.', true); return; }
+    App.modal('<h3>🎙️ Auto-transcribe</h3>' +
+      '<p class="muted">Plays your video while the mic listens. Needs internet + mic permission. Accuracy depends on audio clarity.</p>' +
+      '<label class="lbl">Language</label>' +
+      '<div class="row"><button class="btn ghost" id="acEn" style="flex:1">English</button>' +
+      '<button class="btn ghost" id="acUr" style="flex:1">اردو</button></div>' +
+      '<div class="row" style="margin-top:12px"><button class="btn ghost" id="acNo" style="flex:1">Cancel</button></div>',
+      function (root) {
+        root.querySelector('#acNo').onclick = App.closeModal;
+        root.querySelector('#acEn').onclick = function () { App.closeModal(); self._autoCapGo('en-US'); };
+        root.querySelector('#acUr').onclick = function () { App.closeModal(); self._autoCapGo('ur-PK'); };
+      });
+  };
+
+  Editor._autoCapGo = function (lang) {
+    var self = this;
+    var count = 0, lastStatus = '';
+    function status(msg) {
+      lastStatus = msg;
+      var el = document.getElementById('edPanelStatus');
+      if (el) el.textContent = msg;
+      else toast(msg);
+    }
+    var ok = AutoCap.start(lang, function (evt) {
+      if (evt.type === 'interim') {
+        status('🎙️ Listening… "' + String(evt.text).slice(0, 40) + '"');
+      } else if (evt.type === 'final') {
+        var from = Math.max(0, +evt.fromTime || 0);
+        var to = Math.max(from + 0.5, +evt.atTime || (from + 2));
+        Captions.add(evt.text, from, to);
+        count++;
+        status('🎙️ ' + count + ' captions… "' + String(evt.text).slice(0, 40) + '"');
+        self.drawOnce();
+      } else if (evt.type === 'error') {
+        toast(evt.msg, true);
+      } else if (evt.type === 'end') {
+        self._autoCapStop(true);
+      }
+    });
+    if (!ok) { toast('Could not start speech recognition.', true); return; }
+    // status line in panel
+    var panel = document.getElementById('edPanel');
+    if (panel && !document.getElementById('edPanelStatus')) {
+      var st = document.createElement('p');
+      st.id = 'edPanelStatus'; st.className = 'muted';
+      st.textContent = '🎙️ Listening… play your video audio clearly.';
+      panel.insertBefore(st, panel.firstChild);
+    }
+    // play from start so audio is heard by the mic
+    try { this.seek(0); this.play(); } catch (e) {}
+    this.renderPanel();
+    toast('🎙️ Transcribing — allow mic when asked.');
+    // auto-stop when project ends
+    var total = Store.timing().total;
+    var selfRef = this;
+    (function watchEnd() {
+      if (!AutoCap.isActive()) return;
+      if (!selfRef.playing || selfRef.t >= total - 0.1) { selfRef._autoCapStop(); return; }
+      setTimeout(watchEnd, 500);
+    })();
+  };
+
+  Editor._autoCapStop = function (silent) {
+    try { if (window.AutoCap) AutoCap.stop(); } catch (e) {}
+    try { if (this.playing) this.pause(); } catch (e) {}
+    var st = document.getElementById('edPanelStatus');
+    if (st && st.parentNode) st.parentNode.removeChild(st);
+    if (!silent) toast('Transcription stopped.');
+    this.drawOnce(); this.renderPanel();
   };
 
   /* ---------- AUDIO ---------- */
@@ -1244,18 +1342,22 @@
 
   /* ================= PANEL: AI ================= */
   Editor.panel_ai = function (el) {
+    var self = this;
     var rows = [
-      { ic: '✂️', t: 'AI Clipper', d: 'Analyzes video and suggests the best sections to keep. Needs an AI backend — architecture ready, not connected yet.' },
-      { ic: '💬', t: 'Auto Captions', d: 'Speech-to-text captions. Needs a transcription backend — not available on this device.' },
-      { ic: '🪄', t: 'Background Removal', d: 'AI person segmentation. Needs a vision backend — not available on this device.' },
-      { ic: '🔍', t: 'AI Enhance', d: 'AI upscaling/denoise. Needs a GPU backend — not available on this device.' }
+      { ic: '✂️', t: 'AI Clipper', d: 'Analyzes video and suggests the best sections to keep. Needs an AI backend — architecture ready, not connected yet.', go: null },
+      { ic: '💬', t: 'Auto Captions', d: 'FREE speech-to-text via your browser. Tap to open the Captions panel.', go: 'captions' },
+      { ic: '🪄', t: 'Background Blur / Replace', d: 'FREE on-device AI person segmentation. Tap to open Body effects.', go: 'fx-body' },
+      { ic: '🔍', t: 'AI Enhance', d: 'AI upscaling/denoise. Needs a GPU backend — not available on this device.', go: null }
     ];
     var d = document.createElement('div');
-    d.innerHTML = '<h4>🤖 AI Tools</h4><p class="muted" style="margin-bottom:10px">These need an online AI backend. Nothing here is faked — unavailable features are marked honestly.</p>';
+    d.innerHTML = '<h4>🤖 AI Tools</h4><p class="muted" style="margin-bottom:10px">Free on-device AI works now — no API key. Nothing here is faked.</p>';
     rows.forEach(function (r) {
       var row = document.createElement('div');
       row.className = 'ai-row';
-      row.innerHTML = '<span class="ic">' + r.ic + '</span><span class="tx"><b>' + esc(r.t) + '</b>' + esc(r.d) + '</span><span class="ai-badge">UNAVAILABLE</span>';
+      row.innerHTML = '<span class="ic">' + r.ic + '</span><span class="tx"><b>' + esc(r.t) + '</b>' + esc(r.d) + '</span>' +
+        (r.go ? '<span class="ai-badge" style="background:rgba(34,197,94,.15);color:#4ade80">FREE →</span>' : '<span class="ai-badge">UNAVAILABLE</span>');
+      if (r.go === 'captions') row.onclick = function () { self.setTool('captions'); };
+      if (r.go === 'fx-body') row.onclick = function () { self._fxCat = 'body'; self.setTool('fx'); };
       d.appendChild(row);
     });
     el.appendChild(d);
