@@ -119,6 +119,8 @@
         if (!v.buffer) return;
         var src = c.createBufferSource();
         src.buffer = v.buffer; src.loop = !!v.loop;
+        /* BUG2 FIX: honor clip speed for audio clips (was always 1x) */
+        try { src.playbackRate.value = v.speed || 1; } catch (e) {}
         var g = c.createGain();
         var vol = (v.volume == null ? 0.8 : v.volume);
         src.connect(g);
@@ -179,10 +181,12 @@
       }
       var dest = toExport ? this.exportDest() : null;
       if (dest && !el._audExp) {
-        try { el._audSrc.connect(dest); } catch (e) {}
+        /* BUG1 FIX: route through _audMon (gain node) so clip volume/fade/mute
+           applies to export too — previously _audSrc bypassed it. */
+        try { el._audMon.connect(dest); } catch (e) {}
         el._audExp = true;
       } else if (!dest && el._audExp) {
-        try { el._audSrc.disconnect(this.exportDest()); } catch (e) {}
+        try { el._audMon.disconnect(this.exportDest()); } catch (e) {}
         el._audExp = false;
       }
     }

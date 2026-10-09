@@ -180,7 +180,7 @@ ok(calls.length === n1 && n1 > 0, 'grain draws deterministic dot count per frame
 // ---- 9. source-structure checks: editor wiring ----
 ok(hasSrc(edSrc, 'p.effects = p.effects || []'), 'editor: effects migration in open()');
 ok(hasSrc(edSrc, 'drawEffectSegments'), 'editor: drawEffectSegments defined');
-ok(hasSrc(edSrc, 'self.drawEffectSegments(g, W, H, t)'), 'editor: composite calls drawEffectSegments');
+ok(hasSrc(edSrc, 'self.drawEffectSegments(g, W, H, t, forExport)'), 'editor: composite calls drawEffectSegments');
 ok(hasSrc(edSrc, '_renderEffectLane'), 'editor: _renderEffectLane defined');
 ok(hasSrc(edSrc, 'edTrackEffect'), 'editor: references edTrackEffect');
 ok(hasSrc(edSrc, 'selFxId'), 'editor: selFxId selection state');

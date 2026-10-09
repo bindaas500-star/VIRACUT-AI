@@ -32,7 +32,9 @@
         if (typeof MediaRecorder === 'undefined') return reject(new Error('MediaRecorder not supported on this device.'));
 
         // make sure extracted-audio buffers are decoded before we start
-        Editor.ensureAudioBuffers().then(runExport).catch(function (e) { reject(e); });
+        Editor.ensureAudioBuffers().then(function () {
+          return Editor.ensureReversedBuffers();
+        }).then(runExport).catch(function (e) { reject(e); });
 
         function runExport() {
         self.exporting = true; self._cancel = false;
@@ -62,7 +64,22 @@
           voices.push({
             buffer: buf, volume: (c.volume == null ? 1 : c.volume), loop: false,
             offset: c.in || 0, at: item.start, dur: window.EditorLogic ? EditorLogic.playDur(c) : 0,
-            fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0
+            fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0, speed: c.speed || 1
+          });
+        });
+        // BUG3: reversed video clips — include reversed audio in export
+        tm.items.forEach(function (item) {
+          var c = item.clip;
+          if (c.type !== 'video' || !c.reversed || !c.url) return;
+          var rkey = 'rev_' + c.id + '_' + (c.in || 0) + '_' + (c.out || 0);
+          var rbuf = Editor._revBufs && Editor._revBufs.get(rkey);
+          if (!rbuf) return;
+          var spd = c.speed || 1;
+          var dur = window.EditorLogic ? EditorLogic.playDur(c) : 0;
+          voices.push({
+            buffer: rbuf, volume: (c.volume == null ? 1 : c.volume), loop: false,
+            offset: 0, at: item.start, dur: dur,
+            fadeIn: 0, fadeOut: 0, speed: spd
           });
         });
         if (voices.length) eng.start(voices, true, 0);
