@@ -202,6 +202,9 @@
       if (this.t >= tm.total - 0.05) this.t = 0;
       // decode extracted-audio buffers first if needed
       this.ensureAudioBuffers().then(function () {
+        // BUG3: pre-warm reversed-audio buffers too
+        return self.ensureReversedBuffers();
+      }).then(function () {
         if (self.playing) return;
         self.playing = true;
         var edPlayEl0 = document.getElementById('edPlay');
@@ -266,9 +269,11 @@
             el.playbackRate = c.speed || 1;
             var exp = L.clipVideoTime(c, found.item.start, self.t);
             if (c.reversed) {
-              /* Phase 9: video elements can't play backward natively — keep the
+              /* BUG3: video elements can't play backward natively — keep the
                  element paused and seek it to the reversed position as project
-                 time advances. Audio keeps playing forward (documented). */
+                 time advances. Reversed AUDIO is played separately via a
+                 reversed AudioBuffer (see startAudio/export) — the element's
+                 own audio stays muted to avoid doubling. */
               if (!el.paused) el.pause();
               if (el.readyState >= 1 && Math.abs(el.currentTime - exp) > 0.12) el.currentTime = Math.min(exp, c.out - 0.05);
             } else {
@@ -338,9 +343,27 @@
         voices.push({
           buffer: buf, volume: (c.volume == null ? 1 : c.volume), loop: false,
           offset: off, resumed: !!useKept, at: item.start, dur: EditorLogic.playDur(c),
-          fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0
+          fadeIn: c.fadeIn || 0, fadeOut: c.fadeOut || 0, speed: c.speed || 1
         });
         ki++;
+      });
+      // BUG3: reversed video clips — play reversed audio buffer in sync.
+      // The reversed buffer holds [in,out] backwards, so at project time t
+      // we start at offset (t - item.start) * speed into it.
+      tm.items.forEach(function (item) {
+        var c = item.clip;
+        if (c.type !== 'video' || !c.reversed || !c.url) return;
+        var rkey = 'rev_' + c.id + '_' + (c.in || 0) + '_' + (c.out || 0);
+        var rbuf = self._revBufs && self._revBufs.get(rkey);
+        if (!rbuf) return; // not decoded yet — stays silent this pass
+        var spd = c.speed || 1;
+        var pos = Math.max(0, baseT - item.start);
+        if (pos >= EditorLogic.playDur(c)) return; // already past this clip
+        voices.push({
+          buffer: rbuf, volume: (c.volume == null ? 1 : c.volume), loop: false,
+          offset: pos * spd, at: item.start + pos, dur: EditorLogic.playDur(c) - pos,
+          fadeIn: 0, fadeOut: 0, speed: spd
+        });
       });
       if (voices.length && window.AudioLab) { try { AudioLab.Engine.start(voices, false, baseT); } catch (e) {} }
       this.audioKept = null;
@@ -427,7 +450,7 @@
       // overlays (photo/video picture-in-picture)
       self.drawOverlays(g, W, H, t);
       // Phase 8: timeline effect segments + live preview effect (preview & export share this path)
-      self.drawEffectSegments(g, W, H, t);
+      self.drawEffectSegments(g, W, H, t, forExport);
       g.restore();
     },
     drawOverlays: function (g, W, H, t) {
@@ -490,28 +513,30 @@
     },
     /* Phase 8: render timeline effect segments active at t, in order (later = on top).
        Also renders the temporary live-preview effect (_fxPreview). Shared by
-       preview and export, so committed effects are baked into the video. */
-    drawEffectSegments: function (g, W, H, t) {
+       preview and export, so committed effects are baked into the video.
+       BUG4 FIX: uncommitted previews (_fxPreview/_fxPhotoPreview) are skipped
+       when forExport=true — export only uses committed project.effects. */
+    drawEffectSegments: function (g, W, H, t, forExport) {
       var p = this.project;
       if (window.FXLIB && p && p.effects && p.effects.length) {
         FXLIB.renderSegments(g, W, H, t, p.effects);
       }
       var pv = this._fxPreview;
-      if (window.FXLIB && pv) {
+      if (!forExport && window.FXLIB && pv) {
         var def = FXLIB.get(pv.fxId);
         if (def && def.apply) {
           try { def.apply(g, W, H, t, { start: 0, dur: 9999, params: pv.params }, null); } catch (e) {}
         }
       }
       // Phase 8: photo effects on selected photo clip / overlay
-      this.drawPhotoFx(g, W, H, t);
+      this.drawPhotoFx(g, W, H, t, forExport);
     },
     /* apply item.photoFx for the photo clip under t (photo overlays handled in drawOverlays) */
-    drawPhotoFx: function (g, W, H, t) {
+    drawPhotoFx: function (g, W, H, t, forExport) {
       if (!window.FXLIB) return;
-      // live photo-effect preview (not committed yet)
+      // live photo-effect preview (not committed yet) — skipped in export
       var pp = this._fxPhotoPreview;
-      if (pp && pp.target === 'clip') {
+      if (!forExport && pp && pp.target === 'clip') {
         var pdc = FXLIB.get(pp.fxId);
         if (pdc) { this._applyPhotoFxToFrame(g, W, H, t, pdc, pp.params); return; }
       }
@@ -1352,6 +1377,43 @@
     var self = this, jobs = [];
     (this.project ? this.project.clips : []).forEach(function (c) {
       if (c.type === 'audio' && !self.audioBufs.get(c.id) && c.url) jobs.push(self.ensureClipAudioBuffer(c));
+    });
+    return Promise.all(jobs);
+  };
+  /* BUG3: reversed-video audio. Returns a Promise for the clip's [in,out] audio
+     slice, reversed. Cached per clip+range. Used for both preview and export
+     so reversed clips play backwards audio instead of silence. */
+  Editor.reversedAudioBuffer = function (clip) {
+    var self = this;
+    var key = 'rev_' + clip.id + '_' + (clip.in || 0) + '_' + (clip.out || 0);
+    if (!self._revBufs) self._revBufs = new Map();
+    if (self._revBufs.get(key)) return Promise.resolve(self._revBufs.get(key));
+    return self.ensureClipAudioBuffer(clip).then(function (buf) {
+      if (!buf) return null;
+      try {
+        var ac = AudioLab.Engine.context();
+        var sr = buf.sampleRate;
+        var startS = Math.max(0, Math.floor((clip.in || 0) * sr));
+        var endS = Math.min(buf.length, Math.floor((clip.out || buf.duration) * sr));
+        var len = Math.max(1, endS - startS);
+        var rev = ac.createBuffer(buf.numberOfChannels, len, sr);
+        for (var ch = 0; ch < buf.numberOfChannels; ch++) {
+          var src = buf.getChannelData(ch), dst = rev.getChannelData(ch);
+          for (var i = 0; i < len; i++) dst[i] = src[endS - 1 - i] || 0;
+        }
+        self._revBufs.set(key, rev);
+        return rev;
+      } catch (e) { return null; }
+    });
+  };
+  /* Pre-warm reversed buffers for all reversed video clips. Called before
+     startAudio (preview) and before export voices are built. */
+  Editor.ensureReversedBuffers = function () {
+    var self = this, jobs = [];
+    (this.project ? this.project.clips : []).forEach(function (c) {
+      if (c.type === 'video' && c.reversed && c.url) {
+        jobs.push(self.reversedAudioBuffer(c).catch(function () { return null; }));
+      }
     });
     return Promise.all(jobs);
   };
