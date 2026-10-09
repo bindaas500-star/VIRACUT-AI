@@ -282,6 +282,7 @@
   if (window.FX && window.FX.register) {
     window.FX.register('kinetic_text', {
       name: 'Kinetic Text', icon: '✨', pro: false,
+      needsText: true,
       kineticText: kineticText,
       // hint drawn when a clip uses it but no text overlay is active
       over: function () {}

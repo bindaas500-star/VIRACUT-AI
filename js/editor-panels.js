@@ -547,16 +547,62 @@
     if (!pv) return;
     var def = FXLIB.get(pv.fxId);
     if (!def) return;
+    var self = this;
+    // Text effects: ask user for their own text first
+    if (def.needsText) {
+      this._fxAskText(function (userText) {
+        if (userText) self._fxCommitPreview(pv, def, userText);
+      });
+      return;
+    }
+    this._fxCommitPreview(pv, def, null);
+  };
+  Editor._fxAskText = function (cb) {
+    var self = this;
+    App.modal(
+      '<h3>✨ ' + t('fx.yourtext') + '</h3>' +
+      '<p class="muted">' + t('fx.yourtextsub') + '</p>' +
+      '<textarea id="fxUserText" rows="3" style="width:100%;margin:8px 0" placeholder="' + t('fx.yourtextph') + '"></textarea>' +
+      '<div class="row"><button class="btn" id="fxTxCancel">' + t('set.cancel') + '</button>' +
+      '<button class="btn primary" id="fxTxOk" style="flex:1">' + t('fx.apply') + '</button></div>',
+      function (root) {
+        root.querySelector('#fxTxCancel').onclick = function () { App.closeModal(); cb(null); };
+        root.querySelector('#fxTxOk').onclick = function () {
+          var v = root.querySelector('#fxUserText').value.trim();
+          if (!v) { toast(t('fx.entertext'), true); return; }
+          App.closeModal();
+          cb(v);
+        };
+      }
+    );
+  };
+  Editor._fxCommitPreview = function (pv, def, userText) {
     var total = Store.timing().total;
+    var start = Math.max(0, Math.min(total - 0.5, this.t));
+    var dur = 3;
+    if (start + dur > total) dur = Math.max(0.5, total - start);
+    // Text effect with user's own text: create a text overlay first
+    if (userText && def.needsText) {
+      var tx = {
+        id: Store.uid('tx'),
+        text: userText,
+        position: 'mid',
+        color: '#ffffff',
+        size: 5,
+        start: start,
+        end: Math.min(total, start + dur)
+      };
+      this.project.texts = this.project.texts || [];
+      this.project.texts.push(tx);
+    }
     var sg = {
       id: Store.uid('fx'),
       fxId: pv.fxId,
       name: def.name,
-      start: Math.max(0, Math.min(total - 0.5, this.t)),
-      dur: 3,
+      start: start,
+      dur: dur,
       params: JSON.parse(JSON.stringify(pv.params))
     };
-    if (sg.start + sg.dur > total) sg.dur = Math.max(0.5, total - sg.start);
     this.project.effects = this.project.effects || [];
     this.project.effects.push(sg);
     this.project.effects.sort(function (a, b) { return a.start - b.start; });
