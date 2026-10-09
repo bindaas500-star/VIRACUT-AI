@@ -13,7 +13,7 @@
     isPro: function () { return this.plan() === 'pro'; },
     setPlan: function (p) {
       try { localStorage.setItem(LS_PLAN, p); } catch (e) {}
-      if (window.App) App.refreshPlanBadge();
+      if (window.App && typeof App.refreshPlanBadge === 'function') App.refreshPlanBadge();
     },
     _today: function () { return new Date().toISOString().slice(0, 10); },
     _usage: function () {

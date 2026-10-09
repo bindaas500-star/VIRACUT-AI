@@ -118,7 +118,7 @@ has(html, 'js/bodyfx.js?v=1', 'index.html loads bodyfx.js');
 has(html, 'js/autocap.js?v=1', 'index.html loads autocap.js');
 has(html, 'js/fxlib.js?v=3', 'index.html bumps fxlib.js to v3');
 has(html, 'js/fxthumbs.js?v=3', 'index.html bumps fxthumbs.js to v3');
-has(html, 'js/editor-panels.js?v=6', 'index.html bumps editor-panels.js to v6');
+has(html, 'js/editor-panels.js?v=7', 'index.html bumps editor-panels.js to v7');
 (function () {
   var bi = html.indexOf('js/bodyfx.js');
   var fi = html.indexOf('js/fxlib.js');

@@ -81,7 +81,7 @@ has(src, "getElementById('toolCats')", 'inject is idempotent (no duplicates)');
 /* ---------- index.html wiring ---------- */
 has(html, 'id="screen-toolpage"', 'index.html has screen-toolpage section');
 ok(count(html, 'id="screen-toolpage"') === 1, 'screen-toolpage id appears exactly once');
-has(html, 'js/toolpages.js?v=1', 'index.html loads toolpages.js');
+has(html, 'js/toolpages.js?v=4', 'index.html loads toolpages.js');
 ok(count(html, 'js/toolpages.js') === 1, 'toolpages.js script tag appears exactly once');
 ok(count(html, 'id="tpBack"') === 0, 'tpBack is created dynamically, not hardcoded in HTML');
 
@@ -203,11 +203,11 @@ ok(count(src, "'tpBack'") === 1, 'tpBack id assigned exactly once in source');
   var plist = toolScreen.children.filter(function (c) { return c.className === 'tp-list'; })[0];
   ok(plist.children.length === TP.TOOLS.photo.length, 'photo list renders all tools');
 
-  // empty stack -> falls back to App.back()
+  // empty stack -> goes directly home (loop fix: history-based back caused loops)
   TP._stack = [];
-  var b4 = backed;
+  var s4 = shown.length;
   TP.back();
-  ok(backed === b4 + 1, 'back() on empty stack falls back to App.back()');
+  ok(shown.length === s4 + 1 && shown[shown.length - 1] === 'screen-home', 'back() on empty stack goes directly home');
 
   // every category in CATS has a tools array (except 'all' which uses sections)
   TP.CATS.forEach(function (c) {

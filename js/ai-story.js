@@ -203,6 +203,7 @@
     var cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     var ctx = cv.getContext('2d');
+    if (!ctx) return '';
     var g = ctx.createLinearGradient(0, 0, W, H);
     var hue = (scene.n * 47) % 360;
     g.addColorStop(0, 'hsl(' + hue + ',45%,14%)');
@@ -227,6 +228,7 @@
 
   /* ---------- build a real editable project from a story ---------- */
   function buildProject(story, aspect) {
+    if (!story || !story.title || !story.scenes) return null;
     aspect = aspect || '9:16';
     var dims = aspect === '16:9' ? { w: 640, h: 360 } : aspect === '1:1' ? { w: 640, h: 640 } : { w: 540, h: 960 };
     var p = Store.newProject(story.title.slice(0, 40), aspect);

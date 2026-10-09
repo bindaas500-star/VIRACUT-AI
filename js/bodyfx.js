@@ -93,6 +93,7 @@
   /* Ask the model to segment the current frame (async, throttled).
      frameCanvas: canvas holding the current video frame; W,H its size. */
   function kick(frameCanvas, W, H, t) {
+    if (inThumb()) return; // thumbnails use the synthetic mask — never download the model for them
     if (_status === 'idle') { ensure(); return; }
     if (_status !== 'ready' || !_seg || _busy) return;
     var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());

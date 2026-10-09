@@ -29,8 +29,8 @@ ok(/\.vc-back/.test(css), 'CSS .vc-back exists');
 ok(/:scope > \.vc-back/.test(appJs), 'No duplicate back buttons');
 // Editor keeps its own back button (edBack)
 ok(/edBack/.test(appJs), 'Editor edBack preserved');
-// edBack uses App.back (not hardcoded projects)
-ok(/edBack.*App\.back/.test(appJs), 'edBack uses App.back()');
+// edBack goes directly to My Projects (loop fix: history-based back caused Editor/Projects loop)
+ok(/edBack.*screen-projects/.test(appJs), 'edBack goes directly to My Projects');
 // History limit (prevent unbounded growth)
 ok(/_hist\.length > 20/.test(appJs), 'History bounded at 20');
 // back() falls back to home

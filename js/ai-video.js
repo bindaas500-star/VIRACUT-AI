@@ -12,6 +12,7 @@
   function renderPills() {
     Object.keys(SEL).forEach(function (k) {
       var s = SEL[k], box = document.getElementById(s.el);
+      if (!box) return;
       box.innerHTML = '';
       s.opts.forEach(function (o) {
         var b = document.createElement('button');
@@ -25,17 +26,25 @@
 
   function init() {
     renderPills();
-    document.getElementById('avGenerate').onclick = generate;
-    document.getElementById('avSave').onclick = saveNote;
+    var g = document.getElementById('avGenerate');
+    if (g) g.onclick = generate;
+    var sv = document.getElementById('avSave');
+    if (sv) sv.onclick = saveNote;
   }
 
   function generate() {
-    var prompt = document.getElementById('avPrompt').value.trim();
+    var pe = document.getElementById('avPrompt');
     var prog = document.getElementById('avProgress');
     var fill = document.getElementById('avProgFill');
     var stage = document.getElementById('avStage');
     var res = document.getElementById('avResult');
     var btn = document.getElementById('avGenerate');
+    if (!pe || !btn) return;
+    if (!prog || !fill || !stage || !res) { toast('AI video screen is not ready.', true); return; }
+    if (!window.AIAdapter || typeof AIAdapter.generateVideo !== 'function') {
+      toast('AI module not loaded.', true); return;
+    }
+    var prompt = pe.value.trim();
     res.innerHTML = '';
     btn.disabled = true;
     prog.classList.remove('hidden');
@@ -73,7 +82,9 @@
   }
 
   function saveNote() {
-    var prompt = document.getElementById('avPrompt').value.trim();
+    var pe = document.getElementById('avPrompt');
+    if (!pe) return;
+    var prompt = pe.value.trim();
     if (!prompt) { toast('Write a prompt first.', true); return; }
     var p = Store.current || Store.newProject('AI Video — ' + new Date().toLocaleDateString(), SEL.aspect.val);
     Store.snapshot();

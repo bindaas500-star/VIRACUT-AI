@@ -4,21 +4,24 @@
 
   var Captions = {
     _defStyle: function () { return { size: 1, color: '#ffffff', bg: '#000000', bgOp: 0.72, pos: 'bottom' }; },
+    // projects restored from old storage may lack the captions array
+    _caps: function (p) { if (!p.captions) p.captions = []; return p.captions; },
     add: function (text, start, end, style) {
       var p = Store.current;
       if (!p) return null;
       var c = { id: Store.uid('cap'), text: text, start: +start || 0, end: (end == null ? (+start || 0) + 2 : +end), style: style || this._defStyle() };
       if (c.end <= c.start) c.end = c.start + 2;
-      p.captions.push(c);
+      this._caps(p).push(c);
       Store.snapshot(); Store.persist();
       return c;
     },
     update: function (id, fields) {
       var p = Store.current;
       if (!p) return;
-      for (var i = 0; i < p.captions.length; i++) {
-        if (p.captions[i].id === id) {
-          var c = p.captions[i];
+      var caps = this._caps(p), i;
+      for (i = 0; i < caps.length; i++) {
+        if (caps[i].id === id) {
+          var c = caps[i];
           if (fields.text != null) c.text = fields.text;
           if (fields.start != null) c.start = +fields.start;
           if (fields.end != null) c.end = +fields.end;
@@ -32,12 +35,12 @@
     remove: function (id) {
       var p = Store.current;
       if (!p) return;
-      p.captions = p.captions.filter(function (c) { return c.id !== id; });
+      p.captions = this._caps(p).filter(function (c) { return c.id !== id; });
       Store.snapshot(); Store.persist();
     },
     clear: function () {
       var p = Store.current;
-      if (!p || !p.captions.length) return;
+      if (!p || !this._caps(p).length) return;
       p.captions = [];
       Store.snapshot(); Store.persist();
     },
@@ -68,8 +71,9 @@
     at: function (t) {
       var p = Store.current;
       if (!p) return null;
-      for (var i = 0; i < p.captions.length; i++) {
-        var c = p.captions[i];
+      var caps = this._caps(p), i, c;
+      for (i = 0; i < caps.length; i++) {
+        c = caps[i];
         if (t >= c.start && t <= c.end) return c;
       }
       return null;

@@ -63,7 +63,7 @@
         var i = 0;
         function step() {
           var pct = Math.round(((i + 1) / MOCK_STAGES.length) * 92);
-          if (onProgress) onProgress(MOCK_STAGES[i], pct);
+          if (onProgress) { try { onProgress(MOCK_STAGES[i], pct); } catch (e) {} }
           i++;
           if (i < MOCK_STAGES.length) { setTimeout(step, 700 + Math.random() * 700); }
           else {
