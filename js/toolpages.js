@@ -46,8 +46,6 @@
   var TOOLS = {
     video: [
       { icon: '✂️', name: 'Video Editor', desc: 'Timeline, effects, captions and export', go: openEditor },
-      { icon: '🎬', name: 'Create Video', desc: 'Import clips and start a new project', go: function () { Projects.newProjectDialog(); } },
-      { icon: '🖼️', name: 'Photo to Video', desc: 'Slideshow with Ken Burns motion', go: function () { App.show('screen-photovideo'); } },
       { icon: '🧍', name: 'Body Effects', desc: 'Background blur, glow and spotlight', go: needProject('fx') },
       { icon: '💬', name: 'Auto Captions', desc: 'Speech to subtitles, Urdu + English', go: needProject('captions') },
       { icon: '🎭', name: 'Templates', desc: 'One-tap video styles', go: openTemplates }
@@ -64,8 +62,6 @@
     ai: [
       { icon: '✨', name: 'AI Video Generator', desc: 'Describe it — AI renders the video', tag: 'needs API', go: function () { App.show('screen-aivideo'); } },
       { icon: '✍️', name: 'AI Story', desc: 'Idea to full story, scenes and script', tag: 'offline', go: function () { App.show('screen-aistory'); } },
-      { icon: '🧍', name: 'Body Effects', desc: 'AI person segmentation, runs on-device', tag: 'on-device', go: needProject('fx') },
-      { icon: '🎙️', name: 'Auto Transcribe', desc: 'Speech to captions while video plays', tag: 'free', go: needProject('captions') },
       { icon: '🔥', name: 'Trending Ideas', desc: 'Fresh video ideas, updated daily', tag: 'offline', go: function () { App.show('screen-trending'); } }
     ]
   };

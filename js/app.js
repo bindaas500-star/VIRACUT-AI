@@ -129,7 +129,6 @@
 
   /* ================= HOME ================= */
   var HOME_BTNS = [
-    { ic: '🎬', t: 'Create Video', s: 'new project', go: function () { Projects.newProjectDialog(); } },
     { ic: '📸', t: 'Photo Editor', s: 'PixMaster inside', go: function () { if (window.PhotoUI) PhotoUI.importDialog(); } },
     { ic: '✨', t: 'AI Video Generator', s: 'prompt → video', go: function () { App.show('screen-aivideo'); } },
     { ic: '🖼️', t: 'Photo to Video', s: 'slideshow', go: function () { App.show('screen-photovideo'); } },
