@@ -430,7 +430,7 @@
           if (!media.videoWidth || media.readyState < 2) return;
           mw = media.videoWidth; mh = media.videoHeight;
         } else {
-          if (!media.complete || !media.naturalWidth) return;
+          if (!media || !media.complete || !media.naturalWidth) return;
           mw = media.naturalWidth; mh = media.naturalHeight;
         }
         g.save();
@@ -559,7 +559,7 @@
         var ni = new Image(); ni._src = still; ni.src = still; pre[id] = ni;
       }
       var sim = pre[id];
-      return (sim.complete && sim.naturalWidth) ? sim : null;
+      return (sim && sim.complete && sim.naturalWidth) ? sim : null;
     },
     /* Phase 11: render a transition between prevItem (outgoing) and item (incoming).
        tr = {type:'fade'|'slide'|'zoom'|'wipe', dur, p:0..1}. Shared by preview & export. */
