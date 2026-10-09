@@ -1546,11 +1546,11 @@
   };
 
   /* small "+" tile for empty lanes (track-relative x) */
-  Editor._addTile = function (cb) {
+  Editor._addTile = function (cb, label) {
     var d = document.createElement('div');
     d.className = 'tl-add';
     d.style.left = '8px';
-    d.textContent = '＋';
+    d.textContent = label || '＋';
     d.addEventListener('click', cb);
     return d;
   };
@@ -1601,7 +1601,7 @@
       sp.textContent = '🎵';
       d.appendChild(sp);
     });
-    if (!hasAny) el.appendChild(this._addTile(function () { self.setTool('audio'); }));
+    if (!hasAny) el.appendChild(this._addTile(function () { self.setTool('audio'); }, '＋ Add audio'));
     function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   };
 
