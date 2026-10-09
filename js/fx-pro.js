@@ -76,7 +76,7 @@
    */
   if (window.FX && window.FX.register) {
     window.FX.register('beatsync', {
-      name: 'Beat Sync', icon: '🥁', pro: true,
+      name: 'Beat Sync', icon: '🥁', pro: false,
       pre: function (g, c, item, W, H, t) {
         var p = beatPulse(t);
         if (p > 0.01) {
@@ -124,7 +124,7 @@
   if (window.FX && window.FX.register) {
     // 🔥 Embers — rising sparks
     window.FX.register('embers', {
-      name: 'Embers', icon: '🔥', pro: true,
+      name: 'Embers', icon: '🔥', pro: false,
       over: particleOver({
         seed: 3.7, count: 70, vy: [-110, -45], sway: 18, swayF: 1.4, sz: [1.5, 4],
         draw: function (g, x, y, sz, t, a) {
@@ -136,7 +136,7 @@
     });
     // ❄️ Snowfall — slow drifting snow
     window.FX.register('snowfall', {
-      name: 'Snowfall', icon: '❄️', pro: true,
+      name: 'Snowfall', icon: '❄️', pro: false,
       over: particleOver({
         seed: 9.2, count: 110, vy: [28, 70], sway: 34, swayF: 0.8, sz: [1.5, 4.5],
         draw: function (g, x, y, sz, t, a) {
@@ -146,7 +146,7 @@
     });
     // 🌸 Petals — falling flower petals
     window.FX.register('petals', {
-      name: 'Petals', icon: '🌸', pro: true,
+      name: 'Petals', icon: '🌸', pro: false,
       over: particleOver({
         seed: 5.1, count: 55, vy: [38, 92], sway: 44, swayF: 1.1, sz: [4, 8],
         draw: function (g, x, y, sz, t, a, b) {
@@ -159,7 +159,7 @@
     });
     // ✨ Starfall — twinkling stars
     window.FX.register('starfall', {
-      name: 'Starfall', icon: '✨', pro: true,
+      name: 'Starfall', icon: '✨', pro: false,
       over: particleOver({
         seed: 7.9, count: 80, vy: [0, 0], sway: 0, swayF: 1, sz: [1, 2.6],
         draw: function (g, x, y, sz, t, a) {
@@ -202,19 +202,19 @@
   if (window.FX && window.FX.register) {
     // 🎬 Teal & Orange — blockbuster look
     window.FX.register('cine_teal', {
-      name: 'Teal & Orange', icon: '🎬', pro: true,
+      name: 'Teal & Orange', icon: '🎬', pro: false,
       post: lutPost('saturate(1.35) contrast(1.06) sepia(0.18) hue-rotate(-12deg)'),
       over: tintOver('rgba(0,120,140,0.10)', 'rgba(255,120,40,0.10)', 1)
     });
     // 🌃 Cyber Night — cold blue shadows, neon pop
     window.FX.register('cine_cyber', {
-      name: 'Cyber Night', icon: '🌃', pro: true,
+      name: 'Cyber Night', icon: '🌃', pro: false,
       post: lutPost('saturate(1.25) contrast(1.12) brightness(0.94) hue-rotate(18deg)'),
       over: tintOver('rgba(20,40,120,0.16)', 'rgba(0,10,40,0.22)', 1)
     });
     // 🌅 Golden Hour — warm sunset glow
     window.FX.register('cine_gold', {
-      name: 'Golden Hour', icon: '🌅', pro: true,
+      name: 'Golden Hour', icon: '🌅', pro: false,
       post: lutPost('sepia(0.28) saturate(1.45) brightness(1.05) contrast(1.02)'),
       over: tintOver('rgba(255,190,80,0.14)', 'rgba(200,90,20,0.12)', 1)
     });
@@ -281,7 +281,7 @@
 
   if (window.FX && window.FX.register) {
     window.FX.register('kinetic_text', {
-      name: 'Kinetic Text', icon: '✨', pro: true,
+      name: 'Kinetic Text', icon: '✨', pro: false,
       kineticText: kineticText,
       // hint drawn when a clip uses it but no text overlay is active
       over: function () {}
@@ -298,7 +298,7 @@
   if (window.FX && window.FX.register) {
     // 👾 RGB Split Pro — animated chromatic aberration
     window.FX.register('rgbpro', {
-      name: 'RGB Split Pro', icon: '👾', pro: true,
+      name: 'RGB Split Pro', icon: '👾', pro: false,
       post: function (g, off, c, item, W, H, t) {
         var f = Math.floor(t * 24);
         var d = (2 + prnd(f * 3.7) * 9) * (prnd(f * 9.1) > 0.5 ? 1 : -1);
@@ -315,7 +315,7 @@
     });
     // 🌪️ Whip Pan — fast slide + streaks at clip start
     window.FX.register('whip', {
-      name: 'Whip Pan', icon: '🌪️', pro: true,
+      name: 'Whip Pan', icon: '🌪️', pro: false,
       pre: function (g, c, item, W, H, t) {
         var p = s5prog(item, t);
         if (p < 0.35) {
@@ -339,7 +339,7 @@
     });
     // 🌀 Zoom Spin — spin + zoom opener
     window.FX.register('zoomspin', {
-      name: 'Zoom Spin', icon: '🌀', pro: true,
+      name: 'Zoom Spin', icon: '🌀', pro: false,
       pre: function (g, c, item, W, H, t) {
         var p = s5prog(item, t);
         if (p < 0.5) {
@@ -362,7 +362,7 @@
 
   if (window.FX && window.FX.register) {
     window.FX.register('chroma', {
-      name: 'Chroma Key', icon: '💚', pro: true,
+      name: 'Chroma Key', icon: '💚', pro: false,
       post: function (g, off, c, item, W, H, t) {
         var sw = 360, sh = Math.max(2, Math.round(360 * H / W));
         var tmp = ckCanvas(sw, sh), tg = tmp.getContext('2d');
@@ -387,7 +387,7 @@
      * Tilt-shift look: sharp center band, blurred top & bottom.
      */
     window.FX.register('focusblur', {
-      name: 'Focus Blur', icon: '📷', pro: true,
+      name: 'Focus Blur', icon: '📷', pro: false,
       post: function (g, off, c, item, W, H, t) {
         g.save();
         g.drawImage(off, 0, 0, W, H);
