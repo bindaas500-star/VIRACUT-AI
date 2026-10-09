@@ -338,9 +338,10 @@
     render: function () {
       TXThumb.clear();
       var scr = document.getElementById('screen-templates');
+      var backBtn = scr.querySelector(':scope > .vc-back');
       scr.innerHTML =
-        t('tpl.title') +
-        t('tpl.sub') +
+        '<h2 style="margin:0 0 2px">' + t('tpl.title') + '</h2>' +
+        '<p class="muted" style="margin:0 0 10px">' + t('tpl.sub') + '</p>' +
         '<div class="search-row"><input type="text" id="txSearch" placeholder="' + t('tpl.search') + '"></div>' +
         '<div class="pills" id="txSortPills" style="margin-bottom:6px"></div>' +
         '<div class="pills" id="txCatPills" style="margin-bottom:6px"></div>' +
@@ -370,6 +371,8 @@
       si.oninput = function () { txQuery = si.value.trim().toLowerCase(); TXBrowse.sections(); };
       document.getElementById('txGoCreate').onclick = function () { App.show('screen-txcreate'); TXCreate.render(); };
       this.sections();
+      if (backBtn) scr.insertBefore(backBtn, scr.firstChild);
+      else if (window.App) App.ensureBackBtn('screen-templates');
       // silent check for new templates (free, via GitHub)
       try {
         TXRemote.check(function (err, res) {
