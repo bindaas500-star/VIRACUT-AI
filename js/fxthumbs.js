@@ -100,6 +100,8 @@
     g.restore();
     var params = demoParams(def, t);
     var segLike = { start: 0, dur: LOOP, params: params };
+    var isBody = def.id && def.id.indexOf('b_') === 0;
+    if (isBody && window.BodyFX) { try { BodyFX.thumbBegin(); } catch (e) {} }
     try {
       if (def.apply) {
         def.apply(g, W, H, t, segLike, segLike);
@@ -116,6 +118,7 @@
         g.drawImage(off, 0, 0, W, H); g.restore();
       }
     } catch (e) { /* keep last good frame */ }
+    if (isBody && window.BodyFX) { try { BodyFX.thumbEnd(); } catch (e) {} }
     return true;
   }
 

@@ -436,13 +436,96 @@
     }
   ];
 
-  /* ================= BODY (honest placeholder) ================= */
+  /* ================= BODY (FREE on-device AI via MediaPipe Selfie Segmentation) ================= */
+  /* BodyFX loads the model lazily from CDN; masks are cached per time-bucket
+     so preview and export render identically. In thumbnails a synthetic
+     person silhouette is used (no model download for tiles). */
+  function bodyMask(seg, g, W, H, t) {
+    // kick async segmentation of the current frame, return best cached mask
+    try {
+      if (window.BodyFX) {
+        BodyFX.kick(g.canvas, W, H, t);
+        var m = BodyFX.maskFor(t);
+        if (m) return m;
+        if (BodyFX.inThumb()) return BodyFX.synthMask(W, H);
+      }
+    } catch (e) {}
+    return null;
+  }
   var BD = [
-    { id: 'b_outline', name: 'Outline Glow' }, { id: 'b_neon', name: 'Neon Outline' },
-    { id: 'b_trail', name: 'Motion Trail' }, { id: 'b_bodyglow', name: 'Body Glow' },
-    { id: 'b_sil', name: 'Silhouette' }, { id: 'b_colorline', name: 'Color Outline' },
-    { id: 'b_aura', name: 'Aura' }, { id: 'b_lighttrail', name: 'Light Trail' }
-  ].map(function (e) { e.unavailable = 'model'; e.badge = 'Needs AI model'; return e; });
+    {
+      id: 'b_bgblur', name: 'Background Blur', icon: '🫧',
+      desc: 'Blur the background, keep the person sharp. Free on-device AI.',
+      params: [{ key: 'intensity', label: 'Blur amount', min: 0, max: 30, def: 12, step: 1 }],
+      apply: function (g, W, H, t, seg) {
+        var b = P(seg, 'intensity', 12);
+        var mask = bodyMask(seg, g, W, H, t);
+        if (!mask || b < 0.3) return;
+        withFrame(g, W, H, function (gg, off) {
+          gg.save();
+          try { gg.filter = 'blur(' + b.toFixed(1) + 'px)'; } catch (e) {}
+          gg.drawImage(off, 0, 0, W, H);
+          try { gg.filter = 'none'; } catch (e) {}
+          gg.drawImage(BodyFX.personLayer(off, mask, W, H), 0, 0, W, H);
+          gg.restore();
+        });
+      }
+    },
+    {
+      id: 'b_bodyglow', name: 'Body Glow', icon: '✨',
+      desc: 'Glowing aura outline around the person. Free on-device AI.',
+      params: [{ key: 'intensity', label: 'Glow strength', min: 0, max: 100, def: 60, step: 1 }],
+      apply: function (g, W, H, t, seg) {
+        var inten = P(seg, 'intensity', 60) / 100;
+        var mask = bodyMask(seg, g, W, H, t);
+        if (!mask || inten <= 0.01) return;
+        withFrame(g, W, H, function (gg, off) {
+          var halo = BodyFX.glowLayer(mask, W, H, '#a855f7', 6 + 14 * inten);
+          gg.save();
+          gg.globalCompositeOperation = 'screen';
+          gg.globalAlpha = 0.35 + 0.65 * inten;
+          gg.drawImage(halo, 0, 0, W, H);
+          gg.restore();
+        });
+      }
+    },
+    {
+      id: 'b_bgreplace', name: 'BG Replace', icon: '🎨',
+      desc: 'Replace the background with a color gradient. Free on-device AI.',
+      params: [{ key: 'hue', label: 'Color hue', min: 0, max: 360, def: 265, step: 1 }],
+      apply: function (g, W, H, t, seg) {
+        var hue = P(seg, 'hue', 265);
+        var mask = bodyMask(seg, g, W, H, t);
+        if (!mask) return;
+        withFrame(g, W, H, function (gg, off) {
+          var gr = gg.createLinearGradient(0, 0, W, H);
+          gr.addColorStop(0, 'hsl(' + hue + ',70%,26%)');
+          gr.addColorStop(1, 'hsl(' + ((hue + 40) % 360) + ',75%,12%)');
+          gg.save();
+          gg.fillStyle = gr; gg.fillRect(0, 0, W, H);
+          gg.drawImage(BodyFX.personLayer(off, mask, W, H), 0, 0, W, H);
+          gg.restore();
+        });
+      }
+    },
+    {
+      id: 'b_spotlight', name: 'Spotlight', icon: '🔦',
+      desc: 'Darken everything except the person. Free on-device AI.',
+      params: [{ key: 'intensity', label: 'Darkness', min: 0, max: 100, def: 65, step: 1 }],
+      apply: function (g, W, H, t, seg) {
+        var inten = P(seg, 'intensity', 65) / 100;
+        var mask = bodyMask(seg, g, W, H, t);
+        if (!mask || inten <= 0.01) return;
+        withFrame(g, W, H, function (gg, off) {
+          gg.save();
+          gg.fillStyle = 'rgba(0,0,0,' + (0.75 * inten).toFixed(3) + ')';
+          gg.fillRect(0, 0, W, H);
+          gg.drawImage(BodyFX.personLayer(off, mask, W, H), 0, 0, W, H);
+          gg.restore();
+        });
+      }
+    }
+  ];
 
   /* ================= AI (honest placeholder) ================= */
   var AI = [
@@ -477,8 +560,11 @@
     var def = null, i;
     for (i = 0; i < V.length; i++) if (V[i].id === id) def = V[i];
     if (!def) for (i = 0; i < PH.length; i++) if (PH[i].id === id) def = PH[i];
+    if (!def) for (i = 0; i < BD.length; i++) if (BD[i].id === id) def = BD[i];
     var cv = document.createElement('canvas'); cv.width = 72; cv.height = 72;
     testPattern(cv);
+    var isBody = def && def.id && def.id.indexOf('b_') === 0;
+    if (isBody && window.BodyFX) { try { BodyFX.thumbBegin(); } catch (e) {} }
     if (def && def.apply) {
       try { def.apply(cv.getContext('2d'), 72, 72, 0.7, { start: 0, dur: 3, params: {} }); }
       catch (e) {}
@@ -497,6 +583,7 @@
       } catch (e) {}
     }
     _thumbs[id] = cv.toDataURL();
+    if (isBody && window.BodyFX) { try { BodyFX.thumbEnd(); } catch (e) {} }
     return _thumbs[id];
   }
 
@@ -504,6 +591,7 @@
     var i;
     for (i = 0; i < V.length; i++) if (V[i].id === id) return V[i];
     for (i = 0; i < PH.length; i++) if (PH[i].id === id) return PH[i];
+    for (i = 0; i < BD.length; i++) if (BD[i].id === id) return BD[i];
     return null;
   }
 
