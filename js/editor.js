@@ -34,6 +34,10 @@
       var p = Store.openProject(id);
       if (!p) { toast('Project not found.', true); return; }
       // Phase 2 migrations
+      p.clips = p.clips || [];
+      p.texts = p.texts || [];
+      p.captions = p.captions || [];
+      p.voiceovers = p.voiceovers || [];
       p.overlays = p.overlays || [];
       p.ovLaneCount = Math.max(1, Math.min(3, p.ovLaneCount || 1));
       // Phase 7 migrations: keyframe arrays on all animatable items
@@ -52,6 +56,9 @@
         cp.style = cp.style || { size: 1, color: '#ffffff', bg: '#000000', bgOp: 0.72, pos: 'bottom' };
       });
       this.project = p;
+      // stop any previous session: stale video elements would keep playing
+      this.vidEls.forEach(function (el) { try { el.pause(); } catch (e) {} });
+      cancelAnimationFrame(this.rafId);
       this.vidEls = new Map(); this.imgEls = new Map(); this.stills = new Map();
       this.thumbStrips = new Map(); this.ovEls = new Map();
       this.t = 0; this.playing = false; this.selClipId = null; this.tool = null;
@@ -65,12 +72,14 @@
       this._kfSel = null; this._kfDrag = null; this._kfDragTarget = null;
       this._kfPointers = {}; this._kfPinchD = 0;
       this.audioKept = null; this.placingSticker = null; this.selStickerId = null;
-      this.staged = []; this.audioBufs = new Map(); this._tlBound = false;
+      this.staged = []; this.audioBufs = new Map();
       try { this.zoomPps = Math.max(8, Math.min(160, parseFloat(localStorage.getItem('viracut_tlzoom')) || 30)); } catch (e) { this.zoomPps = 30; }
       this.canvas = document.getElementById('edCanvas');
+      if (!this.canvas) { toast('Editor UI not ready.', true); return; }
       this.ctx = this.canvas.getContext('2d');
       this.sizeCanvas();
-      document.getElementById('edName').textContent = p.name;
+      var edNameEl0 = document.getElementById('edName');
+      if (edNameEl0) edNameEl0.textContent = p.name;
       this.syncMedia(); this.bindTimeline();
       this.renderTools(); this.setTool(null); this.renderTimeline(); this.renderClipStrip(); this.renderStickers(); this.updateUndoRedo();
       this.updateTransport();
@@ -80,13 +89,14 @@
     },
     teardown: function () {
       this.pause();
-      AudioLab.Engine.stop();
+      try { if (window.AudioLab) AudioLab.Engine.stop(); } catch (e) {}
       this.vidEls.forEach(function (el) { try { el.pause(); } catch (e) {} });
       cancelAnimationFrame(this.rafId);
       this.playing = false;
     },
     sizeCanvas: function () {
-      var a = this.project.aspect, W, H;
+      if (!this.canvas) return;
+      var a = this.project ? this.project.aspect : null, W, H;
       if (a === '16:9') { W = 640; H = 360; }
       else if (a === '1:1') { W = 540; H = 540; }
       else { W = 405; H = 720; }
@@ -97,6 +107,7 @@
     /* ================= media elements ================= */
     syncMedia: function () {
       var self = this, seen = {};
+      if (!this.project) return;
       this.project.clips.forEach(function (c) {
         seen[c.id] = true;
         if (c.type === 'video' && c.url && !self.vidEls.has(c.id)) self.makeVideoEl(c);
@@ -167,6 +178,8 @@
             try { el.currentTime = prevPos; } catch (e2) {}
           };
           el.addEventListener('seeked', done);
+          // safety: never strand the listener if the seek never fires
+          setTimeout(function () { el.removeEventListener('seeked', done); }, 8000);
           el.currentTime = Math.max(0, (clip.out || clip.duration || 1) - 0.08);
         } else {
           var im = this.imgEls.get(clip.id);
@@ -185,13 +198,14 @@
     play: function () {
       var self = this;
       var tm = Store.timing();
-      if (!this.project || !tm.items.length) { toast('Import media first.'); return; }
+      if (!this.project || !tm || !tm.items.length) { toast('Import media first.'); return; }
       if (this.t >= tm.total - 0.05) this.t = 0;
       // decode extracted-audio buffers first if needed
       this.ensureAudioBuffers().then(function () {
         if (self.playing) return;
         self.playing = true;
-        document.getElementById('edPlay').textContent = '⏸';
+        var edPlayEl0 = document.getElementById('edPlay');
+        if (edPlayEl0) edPlayEl0.textContent = '⏸';
         self.startAudio();
         self.lastTs = performance.now();
         var loop = function (now) {
@@ -217,9 +231,10 @@
       if (!this.playing) return;
       this.playing = false;
       cancelAnimationFrame(this.rafId);
-      document.getElementById('edPlay').textContent = '▶';
+      var edPlayEl1 = document.getElementById('edPlay');
+      if (edPlayEl1) edPlayEl1.textContent = '▶';
       this.vidEls.forEach(function (el) { try { el.pause(); } catch (e) {} });
-      this.audioKept = AudioLab.Engine.pause();
+      try { this.audioKept = window.AudioLab ? AudioLab.Engine.pause() : null; } catch (e) { this.audioKept = null; }
       this.updateTransport();
     },
     seek: function (t, opts) {
@@ -327,7 +342,7 @@
         });
         ki++;
       });
-      if (voices.length) AudioLab.Engine.start(voices, false, baseT);
+      if (voices.length && window.AudioLab) { try { AudioLab.Engine.start(voices, false, baseT); } catch (e) {} }
       this.audioKept = null;
     },
     updateTransport: function () {
@@ -377,7 +392,7 @@
         }
       });
       // captions (Phase 11: per-caption styling)
-      var cap = Captions.at(t);
+      var cap = window.Captions ? Captions.at(t) : null;
       if (cap) {
         var cs = cap.style || { size: 1, color: '#ffffff', bg: '#000000', bgOp: 0.72, pos: 'bottom' };
         g.save();
@@ -387,7 +402,7 @@
         var bw = tw, bh = fs * 1.7, bx = (W - bw) / 2;
         var by = window.EditorLogic.captionY(cs.pos, H, bh);
         g.fillStyle = Editor._hexA(cs.bg || '#000000', cs.bgOp == null ? 0.72 : cs.bgOp);
-        g.beginPath(); g.roundRect(bx, by, bw, bh, 12); g.fill();
+        g.beginPath(); if (g.roundRect) g.roundRect(bx, by, bw, bh, 12); else g.rect(bx, by, bw, bh); g.fill();
         g.fillStyle = cs.color || '#ffffff';
         g.fillText(cap.text, W / 2, by + bh * 0.68, W * 0.88);
         g.restore();
@@ -1215,7 +1230,7 @@
     function fin() {
       pending--;
       if (pending <= 0) {
-        this.snapshot(); Store.persist();
+        self.snapshot(); Store.persist();
         self.syncMedia(); self.renderTimeline(); self.drawOnce(); self.updateTransport();
         toast(list.length + ' clip(s) added.');
       }
@@ -1253,6 +1268,7 @@
   };
   Editor.commitStaged = function (idx) {
     var self = this, p = this.project;
+    if (!p) return;
     var items = idx == null ? this.staged.slice() : [this.staged[idx]];
     var added = 0;
     // insertion point: after the selected clip, else at the end
@@ -1407,7 +1423,7 @@
   };
   Editor.moveClipTo = function (from, to) {
     var p = this.project;
-    if (!p || from === to) return;
+    if (!p || from === to || from < 0 || from >= p.clips.length) return;
     var oldStarts = this._clipStarts();
     to = Math.max(0, Math.min(p.clips.length - 1, to));
     var x = p.clips.splice(from, 1)[0];
@@ -1451,6 +1467,7 @@
     var inner = document.getElementById('edTlInner');
     var markers = document.getElementById('edMarkers');
     var p = this.project;
+    if (!vTrack || !aTrack || !tTrack || !oTrack || !inner || !markers || !p) return;
     vTrack.innerHTML = ''; aTrack.innerHTML = ''; tTrack.innerHTML = ''; oTrack.innerHTML = '';
     if (fxTrack0) fxTrack0.innerHTML = '';
     markers.innerHTML = '';
@@ -1842,6 +1859,7 @@
     var wrap = document.getElementById('edPreviewWrap');
     var old = document.getElementById('edEmptyImport');
     if (old) old.remove();
+    if (!wrap) return;
     if (this.project && this.project.clips.length) return;
     var d = document.createElement('div');
     d.className = 'ed-empty-import'; d.id = 'edEmptyImport';
@@ -1967,8 +1985,9 @@
       ev.preventDefault();
       card.style.transform = 'translateX(' + dx + 'px)';
       card.style.zIndex = '10';
-      var geom = self._tlGeom;
-      var cx = geom[idx].x + geom[idx].w / 2 + dx;
+      var geom = self._tlGeom || [];
+      var gi = geom[idx] || { x: 0, w: 0 };
+      var cx = gi.x + gi.w / 2 + dx;
       var to = window.EditorLogic.dropIndex(geom, cx, idx);
       card._dropTo = to;
       // insertion indicator line at the drop boundary
@@ -1980,9 +1999,13 @@
       }
       if (to === idx) { ind.style.display = 'none'; }
       else {
-        var ix = to < idx ? geom[to].x : geom[to].x + geom[to].w;
-        ind.style.left = Math.round(ix) + 'px';
-        ind.style.display = 'block';
+        var gt = geom[to];
+        if (!gt) { ind.style.display = 'none'; }
+        else {
+          var ix = to < idx ? gt.x : gt.x + gt.w;
+          ind.style.left = Math.round(ix) + 'px';
+          ind.style.display = 'block';
+        }
       }
     }
     function onUp(ev) {
@@ -2051,6 +2074,7 @@
     var sc = document.getElementById('edTlScroll');
     var inner = document.getElementById('edTlInner');
     var ph = document.getElementById('edPlayhead');
+    if (!sc || !inner || !ph) return;
     var scrubbing = false;
     function seekFromClientX(cx) {
       var total = Store.timing().total; if (!total) return;
@@ -2111,9 +2135,12 @@
       }
     }, { passive: true });
     // sheet close wiring
-    document.getElementById('edSheetX').onclick = function () { self.closeSheet(); };
-    document.getElementById('edSheetBackdrop').onclick = function () { self.closeSheet(); };
-    document.getElementById('edSheetGrip').onclick = function () { self.closeSheet(); };
+    var shX = document.getElementById('edSheetX');
+    var shB = document.getElementById('edSheetBackdrop');
+    var shG = document.getElementById('edSheetGrip');
+    if (shX) shX.onclick = function () { self.closeSheet(); };
+    if (shB) shB.onclick = function () { self.closeSheet(); };
+    if (shG) shG.onclick = function () { self.closeSheet(); };
     // keyframe quick-add button (◇) in transport
     var kfb = document.getElementById('edKf');
     if (kfb) kfb.onclick = function () { self.kfAdd(); };
@@ -2152,6 +2179,7 @@
   };
   Editor.splitAtPlayhead = function () {
     var p = this.project, L = window.EditorLogic;
+    if (!p) return;
     var found = Store.clipAt(this.t);
     if (!found) { toast('Nothing to split — playhead is past the end.'); return; }
     var c = found.item.clip, idx = found.index;
@@ -2318,6 +2346,7 @@
     var L = window.EditorLogic;
     var tg = this.kfTarget();
     if (!tg) { toast('Select a clip, text, overlay or sticker first.', true); return; }
+    if (!this.canvas) return;
     var item = tg.item;
     item.keyframes = item.keyframes || [];
     var t = +this.t.toFixed(2);
@@ -2350,6 +2379,7 @@
     var L = window.EditorLogic;
     var tg = this.kfTarget();
     if (!tg) return;
+    if (!this.canvas) return;
     var item = tg.item;
     item.keyframes = item.keyframes || [];
     var t = +this.t.toFixed(2);
@@ -2411,7 +2441,7 @@
     var tg = this.kfTarget();
     var d = this._kfDrag, target = this._kfDragTarget;
     this._kfDrag = null; this._kfDragTarget = null; this._kfPinchD = 0; this._kfPointers = {};
-    if (!tg || !d || !target || target !== tg.item) { this.drawOnce(); return; }
+    if (!this.canvas || !tg || !d || !target || target !== tg.item) { this.drawOnce(); return; }
     var moved = Math.abs(d.dx) >= 1 || Math.abs(d.dy) >= 1;
     var scaled = d.scaleMul && Math.abs(d.scaleMul - 1) >= 0.01;
     if (!moved && !scaled) { this.drawOnce(); return; }
@@ -2596,8 +2626,9 @@
   };
 
   Editor.updateUndoRedo = function () {
-    document.getElementById('edUndo').disabled = !Store.canUndo();
-    document.getElementById('edRedo').disabled = !Store.canRedo();
+    var eu = document.getElementById('edUndo'), er = document.getElementById('edRedo');
+    if (eu) eu.disabled = !Store.canUndo();
+    if (er) er.disabled = !Store.canRedo();
   };
   Editor.doUndo = function () {
     if (Store.undo()) {
@@ -2605,7 +2636,8 @@
       this.selClipId = null; this.trimModeId = null; this._kfSel = null; this.cropModeId = null; this._cropDraft = null;
       this.sizeCanvas(); this.syncMedia();
       this.renderTimeline(); this.renderStickers(); this.drawOnce(); this.updateTransport(); this.renderPanel();
-      document.getElementById('edName').textContent = this.project.name;
+      var edNameEl = document.getElementById('edName');
+      if (edNameEl && this.project) edNameEl.textContent = this.project.name;
     }
     this.updateUndoRedo();
   };
@@ -2615,7 +2647,8 @@
       this.selClipId = null; this.trimModeId = null; this._kfSel = null; this.cropModeId = null; this._cropDraft = null;
       this.sizeCanvas(); this.syncMedia();
       this.renderTimeline(); this.renderStickers(); this.drawOnce(); this.updateTransport(); this.renderPanel();
-      document.getElementById('edName').textContent = this.project.name;
+      var edNameEl = document.getElementById('edName');
+      if (edNameEl && this.project) edNameEl.textContent = this.project.name;
     }
     this.updateUndoRedo();
   };
