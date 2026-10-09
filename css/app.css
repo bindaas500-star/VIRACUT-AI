@@ -50,6 +50,29 @@ body{
 .home-btn .hb-ic{font-size:26px;width:48px;height:48px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:var(--grad)}
 .home-btn small{color:var(--muted);font-weight:400;font-size:10px}
 .recent-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+
+/* ---------- tool category pages (CapCut-style) ---------- */
+.cat-row{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none}
+.cat-row::-webkit-scrollbar{display:none}
+.cat-tile{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:8px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 8px;min-width:88px;color:var(--txt);font-size:11.5px;font-weight:700;cursor:pointer}
+.cat-tile:active{transform:scale(.95)}
+.cat-tile .ct-ic{font-size:27px;width:50px;height:50px;border-radius:16px;display:flex;align-items:center;justify-content:center;background:var(--grad)}
+.tp-head{margin:2px 0 4px}
+.tp-list{display:flex;flex-direction:column;gap:9px;margin-bottom:4px}
+.tp-item{display:flex;align-items:center;gap:13px;width:100%;background:var(--card);
+  border:1px solid var(--line);border-radius:14px;padding:13px 14px;color:var(--txt);
+  font-size:14.5px;cursor:pointer;text-align:left}
+.tp-item:active{transform:scale(.98);border-color:var(--indigo)}
+.tp-ic{font-size:24px;flex:0 0 auto}
+.tp-tx{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tp-tx b{font-weight:700}
+.tp-tx small{color:var(--muted);font-weight:400;font-size:12px}
+.tp-chev{color:var(--muted);font-size:20px;flex:0 0 auto}
+.tp-sec{display:flex;align-items:center;justify-content:space-between;margin:18px 0 10px}
+.tp-sec>span{font-size:12.5px;font-weight:800;letter-spacing:1.2px;color:#C9CEDD}
+.tp-more{background:none;border:none;color:var(--indigo);font-size:13px;font-weight:700;cursor:pointer;padding:4px 0}
 .recent-card{flex:0 0 128px;background:var(--card);border:1px solid var(--line);border-radius:var(--rs);overflow:hidden;cursor:pointer}
 .recent-card .thumb{height:76px;background:linear-gradient(135deg,#23233d,#191930);display:flex;align-items:center;justify-content:center;font-size:26px;color:#555}
 .recent-card .thumb img{width:100%;height:100%;object-fit:cover}
@@ -91,10 +114,10 @@ input[type=range]{accent-color:var(--violet);width:100%}
 
 /* pills & chips */
 .pills{display:flex;gap:8px;flex-wrap:wrap}
-.pill{padding:9px 15px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
+.pill{padding:9px 15px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:600;cursor:pointer;color:var(--txt)}
 .pill.on{background:var(--grad);color:#fff;border-color:transparent}
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.chip{padding:9px 14px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;cursor:pointer}
+.chip{padding:9px 14px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;cursor:pointer;color:var(--txt)}
 .chip.on{background:var(--grad);color:#fff;border-color:transparent}
 
 /* stepper */
