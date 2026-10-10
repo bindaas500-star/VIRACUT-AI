@@ -1601,8 +1601,230 @@
     "bokeh",
     "particles"
    ]
+  },
+  {
+   "id": "remote_sigma_stride",
+   "title": "Sigma Stride",
+   "icon": "🕶️",
+   "category": "attitude",
+   "slots": 5,
+   "duration": 15,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-10",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Concrete Jungle (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 2,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 3,
+     "slot": 2,
+     "anim": "pan-right",
+     "fx": "glitch",
+     "filter": "vivid",
+     "trans": "zoom"
+    },
+    {
+     "dur": 3,
+     "slot": 3,
+     "anim": "slow-zoom",
+     "fx": "neon",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 4,
+     "slot": 4,
+     "anim": "kenburns-out",
+     "fx": "shake",
+     "filter": "vivid",
+     "trans": "zoom"
+    },
+    {
+     "dur": 3,
+     "slot": 5,
+     "anim": "static",
+     "fx": "flash",
+     "filter": "none",
+     "trans": "fade",
+     "text": {
+      "content": "NO COMPETITION",
+      "urdu": false,
+      "size": 10,
+      "pos": "mid",
+      "color": "#f8fafc",
+      "glow": "#22d3ee",
+      "anim": "pop"
+     }
+    }
+   ],
+   "overlays": [
+    "particles",
+    "grain"
+   ]
+  },
+  {
+   "id": "remote_subah_dua",
+   "title": "Subah Ki Dua",
+   "icon": "🌅",
+   "category": "islamic",
+   "slots": 4,
+   "duration": 14,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-10",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Fajr Glow (AI loop)",
+    "mood": "soft"
+   },
+   "scenes": [
+    {
+     "dur": 4,
+     "slot": 1,
+     "anim": "slow-zoom",
+     "fx": "reveal",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "سُبْحَانَ اللَّهِ",
+      "urdu": true,
+      "size": 12,
+      "pos": "mid",
+      "color": "#fde68a",
+      "glow": "#f59e0b",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3,
+     "slot": 2,
+     "anim": "kenburns-in",
+     "fx": "gloworbs",
+     "filter": "warm",
+     "trans": "fade",
+     "text": {
+      "content": "نئی صبح، نئی دعا",
+      "urdu": true,
+      "size": 9,
+      "pos": "mid",
+      "color": "#fef3c7",
+      "glow": "#fbbf24",
+      "anim": "fadeup"
+     }
+    },
+    {
+     "dur": 4,
+     "slot": 3,
+     "anim": "pan-left",
+     "fx": "reveal",
+     "filter": "warm",
+     "trans": "cut",
+     "text": {
+      "content": "شکر ادا کریں",
+      "urdu": true,
+      "size": 10,
+      "pos": "bottom",
+      "color": "#a7f3d0",
+      "glow": "#34d399",
+      "anim": "words"
+     }
+    },
+    {
+     "dur": 3,
+     "slot": 4,
+     "anim": "static",
+     "fx": "vignette",
+     "filter": "warm",
+     "trans": "fade"
+    }
+   ],
+   "overlays": [
+    "particles",
+    "gloworbs"
+   ]
+  },
+  {
+   "id": "remote_velocity_x",
+   "title": "Velocity X",
+   "icon": "⚡",
+   "category": "beatsync",
+   "slots": 6,
+   "duration": 12,
+   "aspect": "9:16",
+   "remote": true,
+   "added": "2026-10-10",
+   "by": "ViraCut Studio",
+   "music": {
+    "name": "Drop Wave (AI loop)",
+    "mood": "upbeat"
+   },
+   "scenes": [
+    {
+     "dur": 1,
+     "slot": 1,
+     "anim": "kenburns-in",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "cut"
+    },
+    {
+     "dur": 1,
+     "slot": 2,
+     "anim": "pan-right",
+     "fx": "shake",
+     "filter": "vivid",
+     "trans": "zoom"
+    },
+    {
+     "dur": 2,
+     "slot": 3,
+     "anim": "slow-zoom",
+     "fx": "flash",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 2,
+     "slot": 4,
+     "anim": "pan-left",
+     "fx": "punch",
+     "filter": "vivid",
+     "trans": "zoom"
+    },
+    {
+     "dur": 3,
+     "slot": 5,
+     "anim": "kenburns-out",
+     "fx": "shake",
+     "filter": "cool",
+     "trans": "cut"
+    },
+    {
+     "dur": 3,
+     "slot": 6,
+     "anim": "static",
+     "fx": "neon",
+     "filter": "none",
+     "trans": "fade"
+    }
+   ],
+   "overlays": [
+    "streak",
+    "gloworbs"
+   ]
   }
  ],
- "updated": "2026-10-09",
- "version": 7
+ "updated": "2026-10-10",
+ "version": 8
 }
